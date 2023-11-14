@@ -114,24 +114,24 @@ class HopfNetwork():
 
     # walk
     self.PHI_walk = np.pi * np.array([[0, -1/2, -1/4, 1/4],
-                                                               [ 1/2, 0, 1/4, 3/4],
-                                                               [ 1/4, -1/4, 0, 1/2],
-                                                               [-1/4, -3/4, -1/2, 0]])
+                                      [ 1/2, 0, 1/4, 3/4],
+                                      [ 1/4, -1/4, 0, 1/2],
+                                      [-1/4, -3/4, -1/2, 0]])
     # trot
-    self.PHI_trot = np.pi * np.array([[0,-1/2 , -1/2,  0],
-                                                               [1/2, 0, 0, 1/2],
-                                                               [1/2, 0, 0, 1/2],
-                                                               [0, -1/2, -1/2, 0]])
+    self.PHI_trot = np.pi * np.array([[0,-1/2 , -1/2, 0],
+                                      [1/2, 0, 0, 1/2],
+                                      [1/2, 0, 0, 1/2],
+                                      [0, -1/2, -1/2, 0]])
     # bound
     self.PHI_bound = np.pi * np.array([[0, 0, -1/2, -1/2],
-                                                                [0, 0, -1/2, -1/2],
-                                                                [1/2, 1/2, 0, 0],
-                                                                [1/2, 1/2, 0, 0]])
+                                        [0, 0, -1/2, -1/2],
+                                        [1/2, 1/2, 0, 0],
+                                        [1/2, 1/2, 0, 0]])
     # pace
     self.PHI_pace = np.pi * np.array([[0, -1/2, 0, -0.5],
-                                                               [1/2, 0, 1/2, 0],
-                                                               [0, -1/2, 0, -1/2],
-                                                               [1/2, 0, 1/2, 0]])
+                                      [1/2, 0, 1/2, 0],
+                                      [0, -1/2, 0, -1/2],
+                                      [1/2, 0, 1/2, 0]])
 
     if gait == "TROT":
       self.PHI = self.PHI_trot
@@ -180,7 +180,7 @@ class HopfNetwork():
     X = self.X.copy()
     X_dot_prev = self.X_dot.copy() 
     X_dot = np.zeros((2,4))
-
+    # use % to keep the phase between 0 and 2pi
     # loop through each leg's oscillator
     for i in range(4):
       # get r_i, theta_i from X
@@ -189,9 +189,13 @@ class HopfNetwork():
       r_dot = self.alpha * (self.mu - r**2)*r # [TODO] 
       # determine whether oscillator i is in swing or stance phase to set natural frequency omega_swing or omega_stance (see Section 3)
       if (theta >= 0) and (theta <= np.pi): # means swing phase
-        theta_dot = self.omega_swing + np.sum(r * self._coupling_strength * self.PHI[i,:] * np.sin(theta[] - theta[] - )) # [TODO]
+        theta_dot = self.omega_swing
+        for j in range(4):
+          theta_dot += self.X[0,j] * self._coupling_strength * np.sin(self.X[1,j] - theta - self.PHI[i,j])  # [TODO]
       else: # stance phase
-        theta_dot = self.omega_stance # [TODO] w_i + np.sum(r_j * w_ij * sin())
+        theta_dot = self.omega_stance
+        for j in range(4):
+          theta_dot += self.X[0,j] * self._coupling_strength * np.sin(self.X[1,j] - theta - self.PHI[i,j]) # [TODO] w_i + np.sum(r_j * w_ij * sin())
 
       # loop through other oscillators to add coupling (Equation 7)
       if self._couple:
