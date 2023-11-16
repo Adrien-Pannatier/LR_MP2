@@ -65,7 +65,6 @@ class HopfNetwork():
                 ):
     
     
-    ############### 69 ################
     # initialize CPG data structures: amplitude is row 0, and phase is row 1
     self.X = np.zeros((2,4))
     self.X_dot = np.zeros((2,4))
@@ -190,17 +189,13 @@ class HopfNetwork():
       # determine whether oscillator i is in swing or stance phase to set natural frequency omega_swing or omega_stance (see Section 3)
       if (theta >= 0) and (theta <= np.pi): # means swing phase
         theta_dot = self.omega_swing
-        for j in range(4):
-          theta_dot += self.X[0,j] * self._coupling_strength * np.sin(self.X[1,j] - theta - self.PHI[i,j])  # [TODO]
       else: # stance phase
         theta_dot = self.omega_stance
-        for j in range(4):
-          theta_dot += self.X[0,j] * self._coupling_strength * np.sin(self.X[1,j] - theta - self.PHI[i,j]) # [TODO] w_i + np.sum(r_j * w_ij * sin())
 
       # loop through other oscillators to add coupling (Equation 7)
       if self._couple:
-        theta_dot += 0 # [TODO]
-        theta_dot = self._omega_stance 
+        for j in range(4):
+          theta_dot += self.X[0,j] * self._coupling_strength * np.sin(self.X[1,j] - theta - self.PHI[i,j]) # [TODO] 
 
       # set X_dot[:,i]
       X_dot[:,i] = [r_dot, theta_dot]
@@ -250,7 +245,7 @@ class HopfNetwork():
       # get r_i, theta_i from X
       r, theta = X[:,i]
       # amplitude (use mu from RL, i.e. self._mu_rl[i])
-      r_dot = 0  # [TODO]
+      r_dot = self.alpha * (self._mu_rl - r**2)*r # [TODO]
       # phase (use omega from RL, i.e. self._omega_rl[i])
       theta_dot = 0 # [TODO]
 
