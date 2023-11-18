@@ -158,11 +158,11 @@ class HopfNetwork():
     z = np.zeros(4) # [TODO] 
 
     for i in range(len(self.X[1, :])):
-      x[i] = self.des_step_len * self.X[0,i] * np.cos(self.X[1,i]) # scale x by step length
+      x[i] = self._des_step_len * self.X[0,i] * np.cos(self.X[1,i]) # scale x by step length
       if np.sin(self.X[1,i]) > 0:
-        z[i] = -self._robot_height + self._ground_clearance * np.sin(self.X[1,:])
+        z[i] = -self._robot_height + self._ground_clearance * np.sin(self.X[1,i])
       else:
-        z[i] = -self._robot_height + self._ground_penetration * np.sin(self.X[1,:])
+        z[i] = -self._robot_height + self._ground_penetration * np.sin(self.X[1,i])
 
     # scale x by step length
     if not self.use_RL:
@@ -185,12 +185,12 @@ class HopfNetwork():
       # get r_i, theta_i from X
       r, theta = self.X[:, i] # [TODO]
       # compute r_dot (Equation 6)
-      r_dot = self.alpha * (self.mu - r**2)*r # [TODO] 
+      r_dot = self._alpha * (self._mu - r**2)*r # [TODO] 
       # determine whether oscillator i is in swing or stance phase to set natural frequency omega_swing or omega_stance (see Section 3)
       if (theta >= 0) and (theta <= np.pi): # means swing phase
-        theta_dot = self.omega_swing
+        theta_dot = self._omega_swing
       else: # stance phase
-        theta_dot = self.omega_stance
+        theta_dot = self._omega_stance
 
       # loop through other oscillators to add coupling (Equation 7)
       if self._couple:
@@ -245,7 +245,7 @@ class HopfNetwork():
       # get r_i, theta_i from X
       r, theta = X[:,i]
       # amplitude (use mu from RL, i.e. self._mu_rl[i])
-      r_dot = self.alpha * (self._mu_rl - r**2)*r # [TODO]
+      r_dot = self._alpha * (self._mu_rl - r**2)*r # [TODO]
       # phase (use omega from RL, i.e. self._omega_rl[i])
       theta_dot = self._omega_rl[i]
       for j in range(4):

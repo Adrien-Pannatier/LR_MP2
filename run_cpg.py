@@ -86,24 +86,29 @@ for j in range(TEST_STEPS):
   # [TODO] get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
   q = env.robot.GetMotorAngles()
   dq = env.robot.GetMotorVelocities()
-
   # loop through desired foot positions and calculate torques
   for i in range(4):
     # initialize torques for legi
     tau = np.zeros(3)
+    # Extract the desired values from q based on the loop index
+    start_index = i * 3
+    end_index = start_index + 3
+    leg_q = q[start_index:end_index]
+    leg_dq = dq[start_index:end_index]
     # get desired foot i pos (xi, yi, zi) in leg frame
     leg_xyz = np.array([xs[i],sideSign[i] * foot_y,zs[i]])
     # call inverse kinematics to get corresponding joint angles (see ComputeInverseKinematics() in quadruped.py)
-    leg_q = env.robot.ComputeInverseKinematics(i, leg_xyz) # returns joint angles for leg i
+    leg_des_q = env.robot.ComputeInverseKinematics(i, leg_xyz) # returns joint angles for leg i
     # Add joint PD contribution to tau for leg i (Equation 4)
-    tau += kp(leg_q - q) + kd(-dq) # [TODO] 
+    
+    tau += kp*(leg_des_q - leg_q) + kd*(-leg_dq) # [TODO] 
 
     # add Cartesian PD contribution
     if ADD_CARTESIAN_PD:
       # Get current Jacobian and foot position in leg frame (see ComputeJacobianAndPosition() in quadruped.py)
       J, foot_pos = env.robot.ComputeJacobianAndPosition(i) # [TODO] 
       # Get current foot velocity in leg frame (Equation 2)
-      foot_vel = J @ dq # [TODO] 
+      foot_vel = J @ leg_dq # [TODO] 
       # Calculate torque contribution from Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
       tau += J.T @ (kpCartesian @ (leg_xyz - foot_pos) + kdCartesian @ (-foot_vel)) # [TODO]
 
