@@ -195,13 +195,13 @@ class HopfNetwork():
       # loop through other oscillators to add coupling (Equation 7)
       if self._couple:
         for j in range(4):
-          theta_dot += self.X[0,j] * self._coupling_strength * np.sin(self.X[1,j] - theta - self.PHI[i,j]) # [TODO] 
+          theta_dot += X[0,j] * self._coupling_strength * np.sin(X[1,j] - theta - self.PHI[i,j]) # [TODO] /!\ _coupling_strength isnt ij /!\
 
       # set X_dot[:,i]
       X_dot[:,i] = [r_dot, theta_dot]
 
     # integrate 
-    self.X = np.zeros((2,4)) # [TODO]
+    self.X = X + (X_dot_prev + X_dot) * self._dt / 2 # np.zeros((2,4)) # [TODO]
     self.X_dot = X_dot
     # mod phase variables to keep between 0 and 2pi
     self.X[1,:] = self.X[1,:] % (2*np.pi)
@@ -247,7 +247,9 @@ class HopfNetwork():
       # amplitude (use mu from RL, i.e. self._mu_rl[i])
       r_dot = self.alpha * (self._mu_rl - r**2)*r # [TODO]
       # phase (use omega from RL, i.e. self._omega_rl[i])
-      theta_dot = 0 # [TODO]
+      theta_dot = self._omega_rl[i]
+      for j in range(4):
+        theta_dot += X[0,j] * self._coupling_strength * np.sin(X[1,j] - theta - self.PHI[i,j]) # [TODO] /!\ _coupling_strength isnt ij /!\
 
       X_dot[:,i] = [r_dot, theta_dot]
 
