@@ -112,25 +112,30 @@ class HopfNetwork():
     # the order is FR, FL, RR, RL
 
     # walk
-    self.PHI_walk = np.pi * np.array([[0, -1/2, -1/4, 1/4],
+    self.PHI_walk = 2*np.pi * np.array([[0, -1/2, -1/4, 1/4],
                                       [ 1/2, 0, 1/4, 3/4],
                                       [ 1/4, -1/4, 0, 1/2],
                                       [-1/4, -3/4, -1/2, 0]])
     # trot
-    self.PHI_trot = np.pi * np.array([[0,-1/2 , -1/2, 0],
+    self.PHI_trot = 2*np.pi * np.array([[0,-1/2 , -1/2, 0],
                                       [1/2, 0, 0, 1/2],
                                       [1/2, 0, 0, 1/2],
                                       [0, -1/2, -1/2, 0]])
     # bound
-    self.PHI_bound = np.pi * np.array([[0, 0, -1/2, -1/2],
+    self.PHI_bound = 2*np.pi * np.array([[0, 0, -1/2, -1/2],
                                         [0, 0, -1/2, -1/2],
                                         [1/2, 1/2, 0, 0],
                                         [1/2, 1/2, 0, 0]])
     # pace
-    self.PHI_pace = np.pi * np.array([[0, -1/2, 0, -0.5],
+    self.PHI_pace = 2*np.pi * np.array([[0, -1/2, 0, -0.5],
                                       [1/2, 0, 1/2, 0],
                                       [0, -1/2, 0, -1/2],
                                       [1/2, 0, 1/2, 0]])
+    
+    # self.PHI_trot = np.array([[0.0, 0.5, 0.5, 0.0], [0.5, 0.0, 0.0, 0.5], [0.5, 0.0, 0.0, 0.5], [0.0, 0.5, 0.5, 0.0]]) * 2 * np.pi
+    # self.PHI_walk = np.array([[0.0, 0.5, -0.25, 0.25], [0.5, 0.0, 0.25, 0.75], [0.25, -0.25, 0.0, 0.5], [-0.25, -0.75, 0.5, 0.0]]) * 2 * np.pi
+    # self.PHI_bound = np.array([[0.0, 0.0, 0.5, 0.5], [0.0, 0.0, 0.5, 0.5], [0.5, 0.5, 0.0, 0.0], [0.5, 0.5, 0.0, 0.0]]) * 2 * np.pi
+    # self.PHI_pace = np.array([[0.0, 0.5, 0.0, 0.5], [0.5, 0.0, 0.5, 0.0], [0.0, 0.5, 0.0, 0.5], [0.5, 0.5, 0.0, 0.0]]) * 2 * np.pi
 
     if gait == "TROT":
       self.PHI = self.PHI_trot
@@ -249,9 +254,12 @@ class HopfNetwork():
       r_dot = self._alpha * (self._mu_rl - r**2)*r # [TODO]
       # phase (use omega from RL, i.e. self._omega_rl[i])
       theta_dot = self._omega_rl[i]
-      for j in range(4):
-        theta_dot += X[0,j] * self._coupling_strength * np.sin(X[1,j] - theta - self.PHI[i,j]) # [TODO] /!\ _coupling_strength isnt ij /!\
 
+      ### ??????????????????????????????????????????? ###
+      # for j in range(4):
+      #   theta_dot += X[0,j] * self._coupling_strength * np.sin(X[1,j] - theta - self.PHI[i,j]) # [TODO] /!\ _coupling_strength isnt ij /!\
+      ### ??????????????????????????????????????????? ###
+      
       X_dot[:,i] = [r_dot, theta_dot]
 
     # integrate 
