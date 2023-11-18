@@ -158,7 +158,7 @@ class HopfNetwork():
     z = np.zeros(4) # [TODO] 
 
     for i in range(len(self.X[1, :])):
-      x[i] = self._des_step_len * self.X[0,i] * np.cos(self.X[1,i]) # scale x by step length
+      x[i] = -self._des_step_len * self.X[0,i] * np.cos(self.X[1,i]) # scale x by step length
       if np.sin(self.X[1,i]) > 0:
         z[i] = -self._robot_height + self._ground_clearance * np.sin(self.X[1,i])
       else:
@@ -199,7 +199,8 @@ class HopfNetwork():
 
       # set X_dot[:,i]
       X_dot[:,i] = [r_dot, theta_dot]
-
+    # print(X_dot)
+    # print('---------------------------------------')
     # integrate 
     self.X = X + (X_dot_prev + X_dot) * self._dt / 2 # np.zeros((2,4)) # [TODO]
     self.X_dot = X_dot
