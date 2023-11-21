@@ -55,9 +55,9 @@ LEARNING_ALG = "SAC";  USE_GPU = True
 # env_configs = {"motor_control_mode":"CPG",
 #                "task_env": "FLAGRUN", #  "LR_COURSE_TASK",
 #                "observation_space_mode": "LR_COURSE_OBS"}
-env_configs = {}
+env_configs = {"motor_control_mode":"CPG",}
 
-if USE_GPU and LEARNING_ALG=="SAC":
+if USE_GPU and LEARNING_ALG=="PPO":
     gpu_arg = "auto" 
 else:
     gpu_arg = "cpu"
