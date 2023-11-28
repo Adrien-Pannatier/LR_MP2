@@ -103,8 +103,8 @@ TORQUE_LIMITS   = np.asarray( [33.5] * NUM_MOTORS )
 VELOCITY_LIMITS = np.asarray( [21.0] * NUM_MOTORS ) 
 
 # Sample Base Angular Limits for velocities
-LOWER_ANG_VEL_LIM = np.array([10.0, 10.0, 10.0])
-UPPER_ANG_VEL_LIM = np.array([-10.0, -10.0, -10.0])
+LOWER_ANG_VEL_LIM = np.array([-10.0, -10.0, -10.0])
+UPPER_ANG_VEL_LIM = np.array([10.0, 10.0, 10.0])
 
 # Linear Velocity Limits
 LOWER_LIN_VEL_LIM = np.array([-0.5, -0.5, -0.5])

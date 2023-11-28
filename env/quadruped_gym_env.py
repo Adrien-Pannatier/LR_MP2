@@ -229,24 +229,24 @@ class QuadrupedGymEnv(gym.Env):
       observation_high = (np.concatenate((self._robot_config.UPPER_ANGLE_JOINT,
                                          self._robot_config.VELOCITY_LIMITS,
                                          np.array([1.0]*4), # quaternions
-                                         self._robot_config.VELOCITY_LIMITS,
-                                         self._robot_config.VELOCITY_LIMITS,
-                                         np.array([1.0]*4, # Contact booleans
-                                         self._robot_config.VELOCITY_LIMITS,
-                                         self._robot_config.VELOCITY_LIMITS,
-                                         self._robot_config.VELOCITY_LIMITS,
-                                         self._robot_config.VELOCITY_LIMITS))) +  OBSERVATION_EPS)
+                                         self._robot_config.UPPER_ANG_VEL_LIM,
+                                         self._robot_config.UPPER_LIN_VEL_LIM,
+                                         np.array([1.0]*4), # Contact booleans
+                                         self._robot_config.UPPER_CPG_R_LIM,
+                                         self._robot_config.UPPER_CPG_DR_LIM,
+                                         self._robot_config.UPPER_CPG_THETA_LIM,
+                                         self._robot_config.UPPER_CPG_DTHETA_LIM)) +  OBSERVATION_EPS)
       
       observation_low = (np.concatenate((self._robot_config.LOWER_ANGLE_JOINT,
                                          -self._robot_config.VELOCITY_LIMITS,
                                          np.array([-1.0]*4), # quaternions
-                                         self._robot_config.VELOCITY_LIMITS,
-                                         self._robot_config.VELOCITY_LIMITS,
-                                         np.array([0.0]*4, # Contact booleans
-                                         self._robot_config.VELOCITY_LIMITS,
-                                         self._robot_config.VELOCITY_LIMITS,
-                                         self._robot_config.VELOCITY_LIMITS,
-                                         self._robot_config.VELOCITY_LIMITS))) -  OBSERVATION_EPS)
+                                         self._robot_config.LOWER_ANG_VEL_LIM,
+                                         self._robot_config.LOWER_LIN_VEL_LIM,
+                                         np.array([0.0]*4), # Contact booleans
+                                         self._robot_config.LOWER_CPG_R_LIM,
+                                         self._robot_config.LOWER_CPG_DR_LIM,
+                                         self._robot_config.LOWER_CPG_THETA_LIM,
+                                         self._robot_config.LOWER_CPG_DTHETA_LIM)) -  OBSERVATION_EPS)
       
     else:
       raise ValueError("observation space not defined or not intended")
@@ -409,7 +409,6 @@ class QuadrupedGymEnv(gym.Env):
     reward = vel_x_tracking_reward \
             + vel_y_tracking_reward \
             + ang_vel_tracking_reward \
-            + z_height_tracking_reward \
             + lin_vel_pen \
             + ang_r_vel_pen \
             + ang_p_vel_pen \
@@ -524,7 +523,7 @@ class QuadrupedGymEnv(gym.Env):
       # call inverse kinematics to get corresponding joint angles
       q_des = self.robot.ComputeInverseKinematics(i, np.array([x, y, z])) # [TODO]
       # Add joint PD contribution to tau
-      print(kp)
+      # print(kp)
       tau = kp[3*i:3*i+3] * (q_des - q[3*i:3*i+3]) + kd[3*i:3*i+3] * (- dq[3*i:3*i+3]) # [TODO] 
 
       # add Cartesian PD contribution (as you wish)
