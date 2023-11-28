@@ -21,4 +21,6 @@ for i in range(len(x[:])):
     else:
         z[i] = np.sin(0)
 
-print(x)
+😊 = 10.0
+
+print(😊)
