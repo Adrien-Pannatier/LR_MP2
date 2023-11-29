@@ -377,7 +377,13 @@ class QuadrupedGymEnv(gym.Env):
   def _reward_fwd_locomotion(self, des_vel_x=0.5):
     """Learn forward locomotion at a desired velocity. """
     # track the desired velocity 
-    vel_tracking_reward = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[0] - des_vel_x)**2 )
+    vel_tracking_reward_x = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[0] - des_vel_x)**2 )
+    vel_tracking_reward_y = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[1])**2 )
+    ang_vel_tracking_reward = 0.029 * np.exp(-1/ 0.25 * (self.robot.GetBaseAngularVelocity()[2])**2)
+    lin_vel_pen = - 0.1 * np.abs(self.robot.GetBaseLinearVelocity()[2]**2)
+    ang_r_vel_pen = - 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[0]**2)
+    ang_p_vel_pen = - 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[1]**2)
+
     # minimize yaw (go straight)
     yaw_reward = -0.2 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[2]) 
     # don't drift laterally 
@@ -387,7 +393,12 @@ class QuadrupedGymEnv(gym.Env):
     for tau,vel in zip(self._dt_motor_torques,self._dt_motor_velocities):
       energy_reward += np.abs(np.dot(tau,vel)) * self._time_step
 
-    reward = vel_tracking_reward \
+    reward = vel_tracking_reward_x \
+            + vel_tracking_reward_y \
+            + ang_vel_tracking_reward \
+            + lin_vel_pen \
+            + ang_r_vel_pen \
+            + ang_p_vel_pen \
             + yaw_reward \
             + drift_reward \
             - 0.01 * energy_reward \
