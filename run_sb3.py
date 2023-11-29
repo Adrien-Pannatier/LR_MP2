@@ -50,13 +50,14 @@ LOAD_NN = False # if you want to initialize training with a previous model
 NUM_ENVS = 1    # how many pybullet environments to create for data collection
 USE_GPU = False # make sure to install all necessary drivers 
 
-LEARNING_ALG = "SAC";  USE_GPU = True
+LEARNING_ALG = "PPO";  USE_GPU = True
 # after implementing, you will want to test how well the agent learns with your MDP: 
 # env_configs = {"motor_control_mode":"CPG",
 #                "task_env": "FLAGRUN", #  "LR_COURSE_TASK",
 #                "observation_space_mode": "LR_COURSE_OBS"}
-env_configs = {"motor_control_mode":"CPG",
-               "observation_space_mode": "FULL_OBS"}
+env_configs = {"motor_control_mode":"PD",
+               "task_env":"LR_COURSE_TASK",
+               "observation_space_mode": "CPG_RL"}
 # env_configs = {}
 
 if USE_GPU and LEARNING_ALG=="PPO":

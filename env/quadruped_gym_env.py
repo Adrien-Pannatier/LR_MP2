@@ -72,6 +72,15 @@ VIDEO_LOG_DIRECTORY = 'videos/' + datetime.datetime.now().strftime("vid-%Y-%m-%d
 DES_HEIGHT_Z = 0.30
 DES_VEL_X = 0.5
 
+# CPG quantities
+MU_LOW = 1
+MU_UPP = 2
+
+# Max base velocities
+VX_MAX = 30
+VY_MAX = 30
+VZ_MAX = 2
+
 # Implemented observation spaces for deep reinforcement learning: 
 #   "DEFAULT":    motor angles and velocities, body orientation
 #   "LR_COURSE_OBS":  [TODO: what should you include? what is reasonable to measure on the real system? CPG states?] 
@@ -247,6 +256,32 @@ class QuadrupedGymEnv(gym.Env):
                                          self._robot_config.LOWER_CPG_DR_LIM,
                                          self._robot_config.LOWER_CPG_THETA_LIM,
                                          self._robot_config.LOWER_CPG_DTHETA_LIM)) -  OBSERVATION_EPS)
+    
+    elif self._observation_space_mode == "CPG_RL":
+      rdot_max = 2 * self._cpg._alpha * (MU_UPP**2/3) ** (3/2)                         # calcul fait a la main mais mouais pas sur du tout
+      
+      observation_high = (np.concatenate((self._robot_config.UPPER_ANGLE_JOINT,
+                                          self._robot_config.VELOCITY_LIMITS,
+                                          np.array([1.0] * 4),                        #
+                                          np.array([VX_MAX, VY_MAX, VZ_MAX]),     # base velocities
+                                          np.array([1.1] * 4),                     # foot contact positions
+                                          np.array([5.0] * 3),                     # base angular velocities
+                                          np.array([MU_UPP + 1] * 4),                     # limit for r
+                                          np.array([rdot_max + 1] * 4),                   # limit for rdot
+                                          np.array([2 * np.pi+ 0.1] * 4),                # limit for theta
+                                          np.array([4.5*2*np.pi + 0.1] * 4),            # limit for theta dot
+                                          )) + OBSERVATION_EPS)
+      observation_low = (np.concatenate((self._robot_config.LOWER_ANGLE_JOINT,
+                                         -self._robot_config.VELOCITY_LIMITS,
+                                         np.array([-1.0] * 4),
+                                         np.array([-VX_MAX, -VY_MAX, -VZ_MAX]),   # base velocities
+                                         np.array([-1.0] * 4),                      # foot contact positions
+                                         np.array([-5.0] * 3),                       # base angular velocities
+                                         np.array([-1.0] * 4),                         # limit for r
+                                         np.array([-1.0] * 4),                         # limit for rdot a changer)
+                                         np.array([-1.0] * 4),                         # limit for theta
+                                         np.array([-1.0] * 4),                         # limit for theta dots
+                                         )) - OBSERVATION_EPS)
       
     else:
       raise ValueError("observation space not defined or not intended")
@@ -287,6 +322,19 @@ class QuadrupedGymEnv(gym.Env):
                                           self._cpg.get_theta(),
                                           self._cpg.get_dtheta(),
                                         ))
+      
+    elif self._observation_space_mode == "CPG_RL":
+      self._observation = np.concatenate((self.robot.GetMotorAngles(),
+                                          self.robot.GetMotorVelocities(),
+                                          self.robot.GetBaseOrientation(),
+                                          self.robot.GetBaseLinearVelocity(),
+                                          self.robot.GetContactInfo()[3],
+                                          self.robot.GetBaseAngularVelocity(),
+                                          self._cpg.get_r(),
+                                          self._cpg.get_dr(),
+                                          self._cpg.get_theta(),
+                                          self._cpg.get_dtheta(),
+                                          ))
 
     else:
       raise ValueError("observation space not defined or not intended")
@@ -391,8 +439,8 @@ class QuadrupedGymEnv(gym.Env):
   def _reward_lr_course(self):
     """ Implement your reward function here. How will you improve upon the above? """
     vel_x_tracking_reward = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[0] - DES_VEL_X)**2 )
-    vel_y_tracking_reward = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[1])**2 )
-    ang_vel_tracking_reward = 0.025 * np.exp(-1/ 0.25 * (self.robot.GetBaseAngularVelocity()[2])**2)
+    vel_y_tracking_reward = 0.06 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[1])**2 )
+    ang_vel_tracking_reward = 0.029 * np.exp(-1/ 0.25 * (self.robot.GetBaseAngularVelocity()[2])**2)
     lin_vel_pen = - 0.1 * np.abs(self.robot.GetBaseLinearVelocity()[2]**2)
     ang_r_vel_pen = - 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[0]**2)
     ang_p_vel_pen = - 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[1]**2)
@@ -412,7 +460,7 @@ class QuadrupedGymEnv(gym.Env):
             + lin_vel_pen \
             + ang_r_vel_pen \
             + ang_p_vel_pen \
-            + 0.0001 * motor_vel_pen \
+            + 0.0004 * motor_vel_pen \
             
     return max(reward,0) # keep rewards positive
 
