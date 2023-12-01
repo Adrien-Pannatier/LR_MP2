@@ -379,19 +379,22 @@ class QuadrupedGymEnv(gym.Env):
     # track the desired velocity 
     vel_tracking_reward_x = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[0] - des_vel_x)**2 )
     vel_tracking_reward_y = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[1])**2 )
-    ang_vel_tracking_reward = 0.029 * np.exp(-1/ 0.25 * (self.robot.GetBaseAngularVelocity()[2])**2)
+    ang_vel_tracking_reward = 0.025 * np.exp(-1/ 0.25 * (self.robot.GetBaseAngularVelocity()[2])**2)
     lin_vel_pen = - 0.1 * np.abs(self.robot.GetBaseLinearVelocity()[2]**2)
     ang_r_vel_pen = - 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[0]**2)
     ang_p_vel_pen = - 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[1]**2)
 
     # minimize yaw (go straight)
-    yaw_reward = -0.2 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[2]) 
+    # yaw_reward = -0.2 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[2]) 
     # don't drift laterally 
-    drift_reward = -0.01 * abs(self.robot.GetBasePosition()[1]) 
+    # drift_reward = -0.01 * abs(self.robot.GetBasePosition()[1]) 
     # minimize energy 
     energy_reward = 0 
+    motor_vel_pen = 0
+
     for tau,vel in zip(self._dt_motor_torques,self._dt_motor_velocities):
       energy_reward += np.abs(np.dot(tau,vel)) * self._time_step
+      motor_vel_pen += - 0.0001 * np.abs(vel).sum()**2
 
     reward = vel_tracking_reward_x \
             + vel_tracking_reward_y \
@@ -399,10 +402,9 @@ class QuadrupedGymEnv(gym.Env):
             + lin_vel_pen \
             + ang_r_vel_pen \
             + ang_p_vel_pen \
-            + yaw_reward \
-            + drift_reward \
             - 0.01 * energy_reward \
-            - 0.1 * np.linalg.norm(self.robot.GetBaseOrientation() - np.array([0,0,0,1]))
+            + 0.0004 * motor_vel_pen \
+            # - 0.1 * np.linalg.norm(self.robot.GetBaseOrientation() - np.array([0,0,0,1]))
 
     return max(reward,0) # keep rewards positive
 
@@ -427,8 +429,17 @@ class QuadrupedGymEnv(gym.Env):
 
     return dist_to_goal, angle
   
-  def _reward_flag_run(self):
+  def _reward_flag_run(self,des_vel_x=0.5):
     """ Learn to move towards goal location. """
+
+    # track the desired velocity
+    vel_tracking_reward_x = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[0] - des_vel_x)**2 )
+    vel_tracking_reward_y = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[1])**2 )
+    ang_vel_tracking_reward = 0.025 * np.exp(-1/ 0.25 * (self.robot.GetBaseAngularVelocity()[2])**2)
+    lin_vel_pen = - 0.1 * np.abs(self.robot.GetBaseLinearVelocity()[2]**2)
+    ang_r_vel_pen = - 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[0]**2)
+    ang_p_vel_pen = - 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[1]**2)
+
     curr_dist_to_goal, angle = self.get_distance_and_angle_to_goal()
 
     # minimize distance to goal (we want to move towards the goal)
@@ -443,6 +454,12 @@ class QuadrupedGymEnv(gym.Env):
 
     reward = dist_reward \
             + yaw_reward \
+            + vel_tracking_reward_x \
+            + vel_tracking_reward_y \
+            + ang_vel_tracking_reward \
+            + lin_vel_pen \
+            + ang_r_vel_pen \
+            + ang_p_vel_pen \
             - 0.001 * energy_reward 
     
     return max(reward,0) # keep rewards positive
