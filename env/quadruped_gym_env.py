@@ -182,6 +182,8 @@ class QuadrupedGymEnv(gym.Env):
     self._using_test_env = test_env
     self._using_competition_env = competition_env
     self.goal_id = None
+    self.previous_contact_info = [1, 1, 1, 1]
+    self.time_in_air = [0, 0, 0, 0]
     if competition_env:
       test_env = False
       self._using_test_env = False
@@ -323,6 +325,15 @@ class QuadrupedGymEnv(gym.Env):
                                           self._cpg.get_dtheta(),
                                         ))
       
+    elif self._observation_space_mode == "LR_COURSE":
+      self._observation = np.concatenate((self.robot.GetMotorAngles(),
+                                          self.robot.GetMotorVelocities(),
+                                          self.robot.GetBaseOrientation(),
+                                          self.robot.GetBaseLinearVelocity(),
+                                          self.robot.GetContactInfo()[3],
+                                          self.robot.GetBaseAngularVelocity()
+                                          ))
+      
     elif self._observation_space_mode == "CPG_RL":
       self._observation = np.concatenate((self.robot.GetMotorAngles(),
                                           self.robot.GetMotorVelocities(),
@@ -395,7 +406,7 @@ class QuadrupedGymEnv(gym.Env):
     for tau,vel in zip(self._dt_motor_torques,self._dt_motor_velocities):
       energy_reward += np.abs(np.dot(tau,vel)) * self._time_step
       motor_vel_pen += - 0.0001 * np.abs(vel).sum()**2
-
+      foot_air_time_reward 
     reward = vel_tracking_reward_x \
             + vel_tracking_reward_y \
             + ang_vel_tracking_reward \
@@ -434,27 +445,64 @@ class QuadrupedGymEnv(gym.Env):
     # penalize pitch and roll
     roll_pen = 0.01 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[0]**2)
     pitch_pen = 0.01 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[1]**2)
+    vel_z_penalty = -0.1 * self.robot.GetBaseLinearVelocity()[2] ** 2
 
     curr_dist_to_goal, angle = self.get_distance_and_angle_to_goal()
 
     # minimize distance to goal (we want to move towards the goal)
-    dist_reward = 10 * ( self._prev_pos_to_goal - curr_dist_to_goal)
+    dist_reward = 20 * ( self._prev_pos_to_goal - curr_dist_to_goal)
     # minimize yaw deviation to goal (necessary?)
-    yaw_reward = 0 # -0.01 * np.abs(angle) 
+    yaw_pen = -0.05 * np.abs(angle) 
+    angle_tracking_reward = 0.1 * np.exp(-1 / 0.25 * (angle) ** 2)
 
     # minimize energy 
     energy_pen = 0 
-    for tau,vel in zip(self._dt_motor_torques,self._dt_motor_velocities):
-      energy_pen += np.abs(np.dot(tau,vel)) * self._time_step
+    # foot_air_time = [0, 0, 0, 0]
 
+    for tau,vel,air_time in zip(self._dt_motor_torques,self._dt_motor_velocities, self._dt_foot_air_time):
+      energy_pen += np.abs(np.dot(tau,vel)) * self._time_step
+      # print(air_time)
+      # for i in range(4):
+      #   foot_air_time[i] += air_time[i] * self._time_step
+
+    # print('foot_air_time',foot_air_time)
+    # print('------------!-------------!----------!------------!-----------!')
     reward = dist_reward \
-            - yaw_reward \
+            + angle_tracking_reward \
+            + vel_z_penalty \
             - 0.001 * energy_pen \
             - roll_pen \
             - pitch_pen
-    
+            
+    # print('dist_reward', dist_reward)
+    # print('angle_tracking_reward', angle_tracking_reward)
+    # print('vel_z_penalty', vel_z_penalty)
+    # print('energy_pen', 0.001 *energy_pen)
+    # print('roll_pen', roll_pen)
+    # print('pitch_pen', pitch_pen)
+    # print('Contact info', self.robot.GetContactInfo()[3])
+    # print('------------------------------------')
+
     return max(reward,0) # keep rewards positive
-    
+  
+  def calculate_time_in_air(self):
+    current_contact_info = self.robot.GetContactInfo()[3]
+
+    # Iterate through each foot
+    for i in range(4):
+        # Check if current state is different from previous state
+        if current_contact_info[i] != self.previous_contact_info[i]:
+            # If foot is in air (0) now
+            if current_contact_info[i] == 0:
+                # Increment time in air for this foot
+                self.time_in_air[i] += 1  # Assuming a timestep of 1 unit
+
+    # Update previous contact info for the next iteration
+    self.previous_contact_info = current_contact_info
+
+    return self.time_in_air
+
+
   def _reward_lr_course(self):
     """ Implement your reward function here. How will you improve upon the above? """
     vel_x_tracking_reward = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[0] - DES_VEL_X)**2 )
@@ -525,7 +573,7 @@ class QuadrupedGymEnv(gym.Env):
     u = np.clip(actions,-1,1)
     # scale to corresponding desired foot positions (i.e. ranges in x,y,z we allow the agent to choose foot positions)
     # [TODO: edit (do you think these should these be increased? How limiting is this?)]
-    scale_array = np.array([0.1, 0.05, 0.08]*4)
+    scale_array = np.array([0.1, 0.05, 0.05]*4)
     # add to nominal foot position in leg frame (what are the final ranges?)
     des_foot_pos = self._robot_config.NOMINAL_FOOT_POS_LEG_FRAME + scale_array*u
 
@@ -538,16 +586,17 @@ class QuadrupedGymEnv(gym.Env):
     action = np.zeros(12)
     for i in range(4):
       # get Jacobian and foot position in leg frame for leg i (see ComputeJacobianAndPosition() in quadruped.py)
-      J, foot_pos = self.robot.ComputeJacobianAndPosition(i) # [TODO]
+      J, foot_pos = self.robot.ComputeJacobianAndPosition(i) 
       # desired foot position i (from RL above)
-      Pd = des_foot_pos[3*i:3*i+3]# [TODO]
+      Pd = des_foot_pos[3*i:3*i+3]
       # desired foot velocity i
       vd = np.zeros(3) 
       # foot velocity in leg frame i (Equation 2)
-      foot_vel = J @ qd[3*i:3*i+3]# [TODO]
+      foot_vel = np.matmul(J, qd[3*i:3*i+3])
+      # foot_vel = J @ qd[3*i:3*i+3]
       # calculate torques with Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
-      tau = np.zeros(3) # [TODO]
-      tau += J.T @ (kpCartesian @ (Pd - foot_pos) + kdCartesian @ (vd - foot_vel)) # [TODO]
+      tau = np.matmul(np.transpose(J), np.matmul(kpCartesian, Pd - foot_pos) + np.matmul(kdCartesian, vd - foot_vel))
+      # tau += J.T @ (kpCartesian @ (Pd - foot_pos) + kdCartesian @ (vd - foot_vel)) 
 
       action[3*i:3*i+3] = tau
 
@@ -590,12 +639,11 @@ class QuadrupedGymEnv(gym.Env):
       # call inverse kinematics to get corresponding joint angles
       q_des = self.robot.ComputeInverseKinematics(i, np.array([x, y, z])) # [TODO]
       # Add joint PD contribution to tau
-      # print(kp)
       tau = kp[3*i:3*i+3] * (q_des - q[3*i:3*i+3]) + kd[3*i:3*i+3] * (- dq[3*i:3*i+3]) # [TODO] 
 
       # add Cartesian PD contribution (as you wish)
-      # tau_cart = self.ScaleActionToCartesianPos(action)
-      # tau += tau_cart[3*i:3*i+3]
+      tau_cart = self.ScaleActionToCartesianPos(action)
+      tau += tau_cart[3*i:3*i+3]
 
       action[3*i:3*i+3] = tau
 
@@ -608,6 +656,7 @@ class QuadrupedGymEnv(gym.Env):
     # save motor torques and velocities to compute power in reward function
     self._dt_motor_torques = []
     self._dt_motor_velocities = []
+    self._dt_foot_air_time = []
     if "FLAGRUN" in self._TASK_ENV:
       self._prev_pos_to_goal, _ = self.get_distance_and_angle_to_goal()
     
@@ -621,6 +670,7 @@ class QuadrupedGymEnv(gym.Env):
       self._sim_step_counter += 1
       self._dt_motor_torques.append(self.robot.GetMotorTorques())
       self._dt_motor_velocities.append(self.robot.GetMotorVelocities())
+      self._dt_foot_air_time.append(self.calculate_time_in_air())
 
       if self._is_render:
         self._render_step_helper()
