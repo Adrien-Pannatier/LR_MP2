@@ -55,8 +55,8 @@ LEARNING_ALG = "PPO";  USE_GPU = True
 #                "task_env": "FLAGRUN", #  "LR_COURSE_TASK",
 #                "observation_space_mode": "LR_COURSE_OBS"}
 env_configs = {"motor_control_mode":"CARTESIAN_PD",
-               "task_env":"FLAGRUN",
-               "observation_space_mode": "CPG_RL"}
+               "task_env":"FLAGRUN_Y",
+               "observation_space_mode": "FLAGRUN_Y_OBS"}
 # env_configs = {}
 
 def run_simu():
@@ -144,7 +144,7 @@ def run_simu():
         print("\nLoaded model", model_name, "\n")
 
     # Learn and save (may need to train for longer)
-    model.learn(total_timesteps=1000000, log_interval=1,callback=checkpoint_callback)
+    model.learn(total_timesteps=50000, log_interval=1,callback=checkpoint_callback)
     # Don't forget to save the VecNormalize statistics when saving the agent
     model.save( os.path.join(SAVE_PATH, "rl_model" ) ) 
     env.save(os.path.join(SAVE_PATH, "vec_normalize.pkl" )) 

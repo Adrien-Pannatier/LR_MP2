@@ -100,16 +100,18 @@ LOWER_ANGLE_JOINT = np.array([-0.2,  DEFAULT_THIGH_ANGLE - 0.4, DEFAULT_CALF_ANG
 
 # torque and velocity limits 
 TORQUE_LIMITS   = np.asarray( [33.5] * NUM_MOTORS )
-VELOCITY_LIMITS = np.asarray( [21.0] * NUM_MOTORS ) 
+VELOCITY_LIMITS = np.asarray( [15.0] * NUM_MOTORS ) 
 
 # Sample Base Angular Limits for velocities
-LOWER_ANG_VEL_LIM = np.array([-10.0, -10.0, -10.0])
-UPPER_ANG_VEL_LIM = np.array([10.0, 10.0, 10.0])
+LOWER_ANG_VEL_LIM = np.array([-3.0, -3.0, -10.0])
+UPPER_ANG_VEL_LIM = np.array([3.0, 3.0, 10.0])
 
 # Linear Velocity Limits
-LOWER_LIN_VEL_LIM = np.array([-0.5, -0.5, -0.5])
-UPPER_LIN_VEL_LIM = np.array([0.5, 0.5, 0.5])
+LOWER_LIN_VEL_LIM = np.array([-0.5, -0.2, -0.2])
+UPPER_LIN_VEL_LIM = np.array([0.5, 0.2, 0.2])
 
+LOWER_BASE_POS_LIM = 0.3
+UPPER_BASE_POS_LIM = 0.4
 ##### CPG Limits
 
 # CPG R Limits

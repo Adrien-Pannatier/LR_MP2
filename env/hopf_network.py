@@ -118,10 +118,10 @@ class HopfNetwork():
                                       [-1/4, -3/4, -1/2, 0]])
     # trot
     
-    self.PHI_trot = 2*np.pi * np.array([[0,-1/2 , -1/2, 0],
+    self.PHI_trot = 2*np.pi * np.array([[0,1/2 , 1/2, 0],
                                       [1/2, 0, 0, 1/2],
                                       [1/2, 0, 0, 1/2],
-                                      [0, -1/2, -1/2, 0]])
+                                      [0, 1/2, 1/2, 0]])
     # bound
     self.PHI_bound = 2*np.pi * np.array([[0, 0, -1/2, -1/2],
                                         [0, 0, -1/2, -1/2],
