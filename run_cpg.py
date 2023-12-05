@@ -48,12 +48,12 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
-ADD_CARTESIAN_PD = True
+ADD_CARTESIAN_PD = False
 TIME_STEP = 0.001
 FOOT_Y = 0.0838 # this is the hip length 
 SIDESIGN = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negative)
 
-env = QuadrupedGymEnv(render=True,              # visualize
+env = QuadrupedGymEnv(render=False,              # visualize
                     on_rack=False,              # useful for debugging! 
                     isRLGymInterface=False,     # not using RL
                     time_step=TIME_STEP,
@@ -86,9 +86,14 @@ r = np.zeros((4, TEST_STEPS))
 r_dot = np.zeros((4, TEST_STEPS))
 theta = np.zeros((4, TEST_STEPS))
 theta_dot = np.zeros((4, TEST_STEPS))
+####
+# Optimal kp and kd depending on situations:
+# only Cartesian_PD: kp_cart = np.diag([450]*3), kd_cart = np.diag([16]*3)
+# both PDs: kp = np.array([385,385,385]), kd = np.array([2.6, 2.6, 2.6]), kp_cart = np.diag([260]*3), kd_cart = np.diag([15]*3)
+# only Joint_PD: kp = np.array([385,385,385]), kd = np.array([2.6, 2.6, 2.6])
 
 class Hyperparameters:
-   def __init__(self, kp=np.array([200,200,200]), kd=np.array([2.5, 2.5, 2.5]), kp_cart=np.diag([100]*3), kd_cart=np.diag([2.5]*3)) -> None:
+   def __init__(self, kp=np.array([385, 385, 385]), kd=np.array([2.6, 2.6, 2.6]), kp_cart=np.diag([260]*3), kd_cart=np.diag([15]*3)) -> None:
       self.kp = kp
       self.kd = kd
       self.kp_cart = kp_cart
@@ -106,7 +111,6 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
 
   # data to fill
   linear_vel = []
-
 
   for j in range(TEST_STEPS):
     # initialize torque array to send to motors
@@ -135,7 +139,7 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
       # call inverse kinematics to get corresponding joint angles (see ComputeInverseKinematics() in quadruped.py)
       leg_des_q = env.robot.ComputeInverseKinematics(i, leg_xyz) # returns joint angles for leg i
       # Add joint PD contribution to tau for leg i (Equation 4) 
-      # tau += kp*(leg_des_q - leg_q) + kd*(-leg_dq) 
+      tau += kp*(leg_des_q - leg_q) + kd*(-leg_dq) 
 
       # get values for plots
       if i == 0:
@@ -152,7 +156,6 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
         foot_vel = J @ leg_dq 
         # get values for plots
         if i == 0:
-          # print('Cart_contribution: ', J.T @ (kpCartesian @ (leg_xyz - foot_pos) + kdCartesian @ (-foot_vel)) )
           act_leg_pos[:, j] = foot_pos
         # Get current foot velocity in leg frame (Equation 2)
         foot_vel = J @ leg_dq 
@@ -161,7 +164,6 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
 
       # Set tau for legi in action vector
       action[3*i:3*i+3] = tau
-
 
     # send torques to robot and simulate TIME_STEP seconds 
     env.step(action) 
@@ -181,7 +183,6 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
   ###############################################################################################
 
   # Plot CPG States 3.1.1
-
   if do_plot == True:
 
     fig, axs = plt.subplots(2, 2, figsize=(8, 8))
@@ -227,6 +228,7 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
     plt.legend()
     handles, labels = axs[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, loc='upper right')
+
     ##### Value comparison between desired and real##################################
 
     fig = plt.figure(figsize =(10, 5))
@@ -243,7 +245,7 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
           ax.set_ylim([-0.1, 0.1])
         if i == 1:
           ax.set_ylabel(labels[1])
-          ax.set_ylim([-0.2, 0.0])
+          # ax.set_ylim([-0.2, 0.0])
         # ax.legend()
     subfigs[0].subplots_adjust(left = 0.2, bottom = 0.09, right = 0.96, top = 0.9)
     plt.xlabel(labels[0])
