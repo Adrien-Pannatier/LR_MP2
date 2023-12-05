@@ -56,7 +56,7 @@ LEARNING_ALG = "PPO";  USE_GPU = True
 #                "observation_space_mode": "LR_COURSE_OBS"}
 env_configs = {"motor_control_mode":"CARTESIAN_PD",
                "task_env":"FLAGRUN",
-               "observation_space_mode": "LR_COURSE"}
+               "observation_space_mode": "CPG_RL"}
 # env_configs = {}
 
 def run_simu():

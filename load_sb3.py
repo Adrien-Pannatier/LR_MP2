@@ -58,13 +58,13 @@ from utils.file_utils import get_latest_model, load_all_results
 LEARNING_ALG = "PPO"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '120123143305'
-log_dir = interm_dir + '120223005658'
+log_dir = interm_dir + '120223145221'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
 env_config = {"motor_control_mode":"CARTESIAN_PD",
                "task_env":"FLAGRUN",
-               "observation_space_mode": "CPG_RL"}
+               "observation_space_mode": "FLAGRUN_OBS"}
 env_config['render'] = True
 env_config['record_video'] = False
 env_config['add_noise'] = False 
