@@ -69,6 +69,9 @@ t = np.arange(TEST_STEPS)*TIME_STEP
 
 # [TODO] initialize data structures to save CPG and robot states
 
+# Initialize arrays to store data for plotting
+foot_pos_plot = np.zeros((len(t), 3, 2))
+joint_angles_plot = np.zeros((len(t), 3, 2))
 
 ############## Sample Gains
 # joint PD gains
