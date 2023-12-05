@@ -44,14 +44,12 @@ from matplotlib import pyplot as plt
 
 from env.hopf_network import HopfNetwork
 from env.quadruped_gym_env import QuadrupedGymEnv
-import numpy as np
-from matplotlib import pyplot as plt
 
 
 ADD_CARTESIAN_PD = True
 TIME_STEP = 0.001
-FOOT_Y = 0.0838 # this is the hip length 
-SIDESIGN = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negative)
+foot_y = 0.0838 # this is the hip length 
+sideSign = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negative)
 
 env = QuadrupedGymEnv(render=True,              # visualize
                     on_rack=False,              # useful for debugging! 
@@ -63,213 +61,192 @@ env = QuadrupedGymEnv(render=True,              # visualize
                     # record_video=True
                     )
 
-labels_positions = np.array(["x", "y", "z"])
-labels_joint = np.array(["hip", "thigh", "calf"])
-save_plots = False
 # initialize Hopf Network, supply gait
-cpg = HopfNetwork(time_step=TIME_STEP, gait='TROT')
+cpg = HopfNetwork(time_step=TIME_STEP)
 
-TEST_STEPS = int(5 / (TIME_STEP))
-
+TEST_STEPS = int(10 / (TIME_STEP))
 t = np.arange(TEST_STEPS)*TIME_STEP
 
-start_plot = 3000
-end_plot = 4000
+# [TODO] initialize data structures to save CPG and robot states
 
-des_leg_pos = np.zeros((3, TEST_STEPS))
-act_leg_pos = np.zeros((3, TEST_STEPS))
-
-des_joint_angles = np.zeros((3, TEST_STEPS))
-act_joint_angles = np.zeros((3, TEST_STEPS))
-
-r = np.zeros((4, TEST_STEPS))
-r_dot = np.zeros((4, TEST_STEPS))
-theta = np.zeros((4, TEST_STEPS))
-theta_dot = np.zeros((4, TEST_STEPS))
-
-class Hyperparameters:
-   def __init__(self, kp=np.array([200,200,200]), kd=np.array([2.5, 2.5, 2.5]), kp_cart=np.diag([100]*3), kd_cart=np.diag([2.5]*3)) -> None:
-      self.kp = kp
-      self.kd = kd
-      self.kp_cart = kp_cart
-      self.kd_cart = kd_cart
-
-def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
 
 ############## Sample Gains
 # joint PD gains
-  kp=hyp.kp            # HYPERPARAMETERS
-  kd=hyp.kd
-  # Cartesian PD gains
-  kpCartesian = hyp.kp_cart
-  kdCartesian = hyp.kd_cart
+kp=np.array([100,100,100])
+kd=np.array([2,2,2])
+# Cartesian PD gains
+kpCartesian = np.diag([500]*3)
+kdCartesian = np.diag([20]*3)
 
-  # data to fill
-  linear_vel = []
+for j in range(TEST_STEPS):
+  # initialize torque array to send to motors
+  action = np.zeros(12) 
+  # get desired foot positions from CPG 
+  xs,zs = cpg.update()
+  # [TODO] get current motor angles and velocities for joint PD, see GetMotorAngles(), GetMotorVelocities() in quadruped.py
+  q = env.robot.GetMotorAngles()
+  dq = env.robot.GetMotorVelocities()
+  # loop through desired foot positions and calculate torques
+  for i in range(4):
+    # initialize torques for legi
+    tau = np.zeros(3)
+    # Extract the desired values from q based on the loop index
+    start_index = i * 3
+    end_index = start_index + 3
+    leg_q = q[start_index:end_index]
+    leg_dq = dq[start_index:end_index]
+    # get desired foot i pos (xi, yi, zi) in leg frame
+    leg_xyz = np.array([xs[i],sideSign[i] * foot_y,zs[i]])
+    # call inverse kinematics to get corresponding joint angles (see ComputeInverseKinematics() in quadruped.py)
+    leg_des_q = env.robot.ComputeInverseKinematics(i, leg_xyz) # returns joint angles for leg i
+    # Add joint PD contribution to tau for leg i (Equation 4)
+    
+    tau += kp*(leg_des_q - leg_q) + kd*(-leg_dq) # [TODO] 
+
+    # add Cartesian PD contribution
+    if ADD_CARTESIAN_PD:
+      # Get current Jacobian and foot position in leg frame (see ComputeJacobianAndPosition() in quadruped.py)
+      J, foot_pos = env.robot.ComputeJacobianAndPosition(i) # [TODO] 
+      # Get current foot velocity in leg frame (Equation 2)
+      foot_vel = J @ leg_dq # [TODO] 
+      # Calculate torque contribution from Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
+      tau += J.T @ (kpCartesian @ (leg_xyz - foot_pos) + kdCartesian @ (-foot_vel)) # [TODO]
+
+        # Save data for plotting
+    if i == 0:
+          foot_pos_plot[j, :, 0] = leg_xyz  # save desired position
+          foot_pos_plot[j, :, 1] = foot_pos  # save actual position
+          joint_angles_plot[j, :, 0] = leg_des_q  # save desired joint angles
+          joint_angles_plot[j, :, 1] = leg_q  # save actual joint angles
+
+    
+    # Set tau for legi in action vector
+    action[3*i:3*i+3] = tau
+
+  # send torques to robot and simulate TIME_STEP seconds 
+  env.step(action) 
+
+  # [TODO] save any CPG or robot states
+    cpg_states[i] = cpg.X
+    if i > 0:
+      cpg_velocities[i-1] = cpg_states[i] - cpg_states[i-1]
+      cpg_velocities[i-1,1,:] = cpg_velocities[i-1,1,:] % (2*np.pi)
+      cpg_velocities[i-1] = cpg_velocities[i-1] / cpg._dt
+
+    if i>=int(TEST_STEPS/2):  #only save after convergence to steady gait
+        if np.sin(cpg.X[1,0])>0:
+            stance_array_theoretical[j-int(TEST_STEPS/2)]=0
+        else:
+            stance_array_theoretical[j-int(TEST_STEPS/2)]=1
+        stance_array_simulation[j-int(TEST_STEPS/2)]=env.robot.GetContactInfo()[3][0]
+        lin_x_vel[j-int(TEST_STEPS/2)] = env.robot.GetBaseLinearVelocity()[0]
+
+    energy += np.sum(env.robot.GetMotorTorques() *                              \
+                     env.robot.GetMotorVelocities()) * TIME_STEP
 
 
-  for j in range(TEST_STEPS):
-    # initialize torque array to send to motors
-    action = np.zeros(12) 
-    # get desired foot positions from CPG 
-    xs,zs = cpg.update()
-    q = env.robot.GetMotorAngles()
-    dq = env.robot.GetMotorVelocities()
-    # loop through desired foot positions and calculate torques
-    # get values for plot
-    r[:, j] = cpg.get_r()
-    r_dot[:, j] = cpg.get_dr()
-    theta[:, j] = cpg.get_theta()
-    theta_dot[:, j] = cpg.get_dtheta()
 
-    for i in range(4):
-      # initialize torques for legi
-      tau = np.zeros(3)
-      # Extract the desired values from q based on the loop index
-      start_index = i * 3
-      end_index = start_index + 3
-      leg_q = q[start_index:end_index]
-      leg_dq = dq[start_index:end_index]
-      # get desired foot i pos (xi, yi, zi) in leg frame
-      leg_xyz = np.array([xs[i],SIDESIGN[i] * FOOT_Y,zs[i]])
-      # call inverse kinematics to get corresponding joint angles (see ComputeInverseKinematics() in quadruped.py)
-      leg_des_q = env.robot.ComputeInverseKinematics(i, leg_xyz) # returns joint angles for leg i
-      # Add joint PD contribution to tau for leg i (Equation 4) 
-      # tau += kp*(leg_des_q - leg_q) + kd*(-leg_dq) 
+##################################################### 
+# PLOTS
+#####################################################
 
-      # get values for plots
-      if i == 0:
-          des_leg_pos[:, j] = leg_xyz
-          des_joint_angles[:, j] = leg_des_q
-          act_joint_angles[:, j] = leg_q
-          J, foot_pos = env.robot.ComputeJacobianAndPosition(i)
-          act_leg_pos[:, j] = foot_pos
-
-      # add Cartesian PD contribution
-      if ADD_CARTESIAN_PD:
-        # Get current Jacobian and foot position in leg frame (see ComputeJacobianAndPosition() in quadruped.py)
-        J, foot_pos = env.robot.ComputeJacobianAndPosition(i) 
-        foot_vel = J @ leg_dq 
-        # get values for plots
-        if i == 0:
-          # print('Cart_contribution: ', J.T @ (kpCartesian @ (leg_xyz - foot_pos) + kdCartesian @ (-foot_vel)) )
-          act_leg_pos[:, j] = foot_pos
-        # Get current foot velocity in leg frame (Equation 2)
-        foot_vel = J @ leg_dq 
-        # Calculate torque contribution from Cartesian PD (Equation 5) [Make sure you are using matrix multiplications]
-        tau += np.matmul(J.T, np.matmul(kpCartesian, (leg_xyz - foot_pos)) + np.matmul(kdCartesian, (-foot_vel)))
-
-      # Set tau for legi in action vector
-      action[3*i:3*i+3] = tau
-
-
-    # send torques to robot and simulate TIME_STEP seconds 
-    env.step(action) 
-    linear_vel.append(env.robot.GetBaseLinearVelocity())
-
-  ###############################################################################################
-  ####################################----RETURNS----############################################
-  ###############################################################################################
-  
-  if return_wanted == "maxvel":
-     return linear_vel
+##################################################### 
+# A plot of the CPG states (r, θ, ˙ r, ˙θ)
+#####################################################
+  fig, ax = plt.subplots(2, 2)
+  if ADD_CARTESIAN_PD:
+      fig.suptitle('{}: CPG states (with Cartesian PD)'.format(cpg.gait))
   else:
-     pass
+      fig.suptitle('{}: CPG states (without Cartesian PD)'.format(cpg.gait))
 
-  ###############################################################################################
-  ####################################-----PLOTS-----############################################
-  ###############################################################################################
+  ax[0,0].plot(t,cpg_states[:, 0, :])
+  ax[0,0].set_xlabel('time')
+  ax[0,0].set_ylabel('r')
+  ax[0,0].legend(['FR', 'FL', 'RR', 'RL'])
 
-  # Plot CPG States 3.1.1
+  ax[0,1].plot(t,cpg_states[:, 1, :])
+  ax[0,1].set_xlabel('time')
+  ax[0,1].set_ylabel('theta')
+  ax[0,1].legend(['FR', 'FL', 'RR', 'RL'])
 
-  if do_plot == True:
+  ax[1,0].plot(t[0:-1],cpg_velocities[:, 0, :])
+  ax[1,0].set_xlabel('time')
+  ax[1,0].set_ylabel('r_dot')
+  ax[1,0].legend(['FR', 'FL', 'RR', 'RL'])
 
-    fig, axs = plt.subplots(2, 2, figsize=(8, 8))
-    fig.suptitle('CPG States for trot gait')
+  ax[1,1].plot(t[0:-1],cpg_velocities[:, 1, :])
+  ax[1,1].set_xlabel('time')
+  ax[1,1].set_ylabel('theta_dot')
+  ax[1,1].legend(['FR', 'FL', 'RR', 'RL'])
 
-    # Plot FL
-    axs[0, 0].plot(t[start_plot:end_plot], r[0, start_plot:end_plot], label='r', color='royalblue')
-    axs[0, 0].plot(t[start_plot:end_plot], r_dot[0,start_plot:end_plot], linestyle='dashed', label='dr', color='royalblue')
-    axs[0, 0].plot(t[start_plot:end_plot], theta[0,start_plot:end_plot], label='theta', color='firebrick')
-    axs[0, 0].plot(t[start_plot:end_plot], theta_dot[0,start_plot:end_plot], linestyle='dashed', label='dtheta', color='firebrick')
-    axs[0, 0].set_title('FR')
-    axs[0, 0].set_xlabel('Time (s)')
-    axs[0, 0].set_ylabel('Amplitude')
+##################################################### 
+# A plot comparing the desired foot position vs. actual foot position
+#####################################################
+fig, ax = plt.subplots(3, 1)
+if ADD_CARTESIAN_PD:
+    fig.suptitle('Desired/Actual Foot Position Over Time (with Cartesian PD)')
+else:
+    fig.suptitle('Desired/Actual Foot Position Over Time (without Cartesian PD)')
 
-    # Plot FR
-    axs[0, 1].plot(t[start_plot:end_plot], r[1, start_plot:end_plot], label='r', color='royalblue')
-    axs[0, 1].plot(t[start_plot:end_plot], r_dot[1,start_plot:end_plot], linestyle='dashed', label='dr', color='royalblue')
-    axs[0, 1].plot(t[start_plot:end_plot], theta[1,start_plot:end_plot], label='theta', color='firebrick')
-    axs[0, 1].plot(t[start_plot:end_plot], theta_dot[1,start_plot:end_plot], linestyle='dashed', label='dtheta', color='firebrick')
-    axs[0, 1].set_title('FL')
-    axs[0, 1].set_xlabel('Time (s)')
-    axs[0, 1].set_ylabel('Amplitude')
+ax[0].plot(t, foot_pos_plot[:, 0, :])
+ax[0].set_xlabel('Time')
+ax[0].set_ylabel('X Position')
+ax[0].legend(['Desired Foot Position', 'Actual Foot Position'])
 
-    # Plot HL
-    axs[1, 0].plot(t[start_plot:end_plot], r[2, start_plot:end_plot], label='r', color='royalblue')
-    axs[1, 0].plot(t[start_plot:end_plot], r_dot[2,start_plot:end_plot], linestyle='dashed', label='dr', color='royalblue')
-    axs[1, 0].plot(t[start_plot:end_plot], theta[2,start_plot:end_plot], label='theta', color='firebrick')
-    axs[1, 0].plot(t[start_plot:end_plot], theta_dot[2,start_plot:end_plot], linestyle='dashed', label='dtheta', color='firebrick')
-    axs[1, 0].set_title('RR')
-    axs[1, 0].set_xlabel('Time (s)')
-    axs[1, 0].set_ylabel('Amplitude')
+ax[1].plot(t, foot_pos_plot[:, 1, :])
+ax[1].set_xlabel('Time')
+ax[1].set_ylabel('Y Position')
+ax[1].legend(['Desired Foot Position', 'Actual Foot Position'])
 
-    # Plot HR
-    axs[1, 1].plot(t[start_plot:end_plot], r[3, start_plot:end_plot], color='royalblue')
-    axs[1, 1].plot(t[start_plot:end_plot], r_dot[3,start_plot:end_plot], linestyle='dashed', color='royalblue')
-    axs[1, 1].plot(t[start_plot:end_plot], theta[3,start_plot:end_plot], color='firebrick')
-    axs[1, 1].plot(t[start_plot:end_plot], theta_dot[3,start_plot:end_plot], linestyle='dashed', color='firebrick')
-    axs[1, 1].set_title('RL')
-    axs[1, 1].set_xlabel('Time (s)')
-    axs[1, 1].set_ylabel('Amplitude')
+ax[2].plot(t, foot_pos_plot[:, 2, :])
+ax[2].set_xlabel('Time')
+ax[2].set_ylabel('Z Position')
+ax[2].legend(['Desired Foot Position', 'Actual Foot Position'])
 
-    fig.subplots_adjust(left=0.05, bottom=0.084, right=0.898, top=0.88, wspace = 0.171, hspace = 0.363)
-    plt.legend()
-    handles, labels = axs[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc='upper right')
-    ##### Value comparison between desired and real##################################
+##################################################### 
+# A plot comparing the desired joint angles vs. actual joint angles
+#####################################################
+fig, ax = plt.subplots(3, 1)
+if ADD_CARTESIAN_PD:
+    fig.suptitle('Desired/Actual Joint Angles Over Time (with Cartesian PD)')
+else:
+    fig.suptitle('Desired/Actual Joint Angles Over Time (without Cartesian PD)')
 
-    fig = plt.figure(figsize =(10, 5))
-    subfigs = fig.subfigures(1, 2, wspace=0.07)
-    labels = np.array(["time [s]", "Position [m]"])
-    ax1 = subfigs[0].subplots(3, 1, sharex=True)
-    subfigs[0].suptitle("Foot positions")
-    for i, ax in enumerate(ax1):
-        ax.plot(t[start_plot:end_plot], des_leg_pos[i, start_plot:end_plot], label = "desired")
-        ax.plot(t[start_plot:end_plot], act_leg_pos[i, start_plot:end_plot], label = "actual", color = "r")
-        ax.set_title('Axis : ' + labels_positions[i])
-        ax.grid(True)
-        if i == 0:
-          ax.set_ylim([-0.1, 0.1])
-        if i == 1:
-          ax.set_ylabel(labels[1])
-          ax.set_ylim([-0.2, 0.0])
-        # ax.legend()
-    subfigs[0].subplots_adjust(left = 0.2, bottom = 0.09, right = 0.96, top = 0.9)
-    plt.xlabel(labels[0])
+ax[0].plot(t, joint_angles_plot[:, 0, :])
+ax[0].set_xlabel('Time')
+ax[0].set_ylabel('Hip Angle (q0)')
+ax[0].legend(['Desired Joint Angle', 'Actual Joint Angle'])
 
-    labels = np.array(["time [s]", "angle [rad]"])
-    ax2 = subfigs[1].subplots(3, sharex=True)
-    subfigs[1].suptitle("Joint positions")
-    for i, ax in enumerate(ax2):
-        ax.plot(t[start_plot:end_plot], des_joint_angles[i, start_plot:end_plot], label="desired")
-        ax.plot(t[start_plot:end_plot], act_joint_angles[i, start_plot:end_plot], label="actual", color="r")
-        ax.set_title('Joint: ' + labels_joint[i])
-        ax.grid(True)
-        if i == 0:
-          ax.set_ylim([-0.1, 0.1])
-        if i == 1:
-          ax.set_ylabel(labels[1])
-        # ax.legend()
-    plt.xlabel(labels[0], loc= 'center')
-    if save_plots:
-        plt.savefig("Pictures/" + plt.get_current_fig_manager().get_window_title() + ".png")
+ax[1].plot(t, joint_angles_plot[:, 1, :])
+ax[1].set_xlabel('Time')
+ax[1].set_ylabel('Thigh Angle (q1)')
+ax[1].legend(['Desired Joint Angle', 'Actual Joint Angle'])
 
-    # plt.legend()
-    handles, labels = ax1[1].get_legend_handles_labels()
-    fig.legend(handles, labels, loc='upper right')
+ax[2].plot(t, joint_angles_plot[:, 2, :])
+ax[2].set_xlabel('Time')
+ax[2].set_ylabel('Calf Angle (q2)')
+ax[2].legend(['Desired Joint Angle', 'Actual Joint Angle'])
 
-    plt.show()
+plt.show()
+
+##################################################### 
+# A discussion on hyperparameters
+#####################################################
+  print("Avg velocity: " + str(env.robot.GetBasePosition()[0]/(TEST_STEPS*TIME_STEP)))
+  print("Avg velocity (without convergence) " + str(np.mean(lin_x_vel)))
+  print("CoT: " + str(energy / (sum(env.robot.GetTotalMassFromURDF()) * 9.81 * env.robot.GetBasePosition()[0])))
+
+  print("Duty Factor Theoretical = Stance duration / Stride duration = " +str(np.sum(stance_array_theoretical)/int(TEST_STEPS/2)))
+  print("Duty Factor Simulation = Stance duration / Stride duration = "  +str(np.sum(stance_array_simulation)/int(TEST_STEPS/2)))
+
+  print("😌")
+
+#####################################################
+# example
+# fig = plt.figure()
+# plt.plot(t,joint_pos[1,:], label='FR thigh')
+# plt.legend()
+# plt.show()
 
 if __name__ == '__main__':
     run_cpg()
