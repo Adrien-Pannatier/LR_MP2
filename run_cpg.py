@@ -239,7 +239,7 @@ plt.show()
   print("Duty Factor Theoretical = Stance duration / Stride duration = " +str(np.sum(stance_array_theoretical)/int(TEST_STEPS/2)))
   print("Duty Factor Simulation = Stance duration / Stride duration = "  +str(np.sum(stance_array_simulation)/int(TEST_STEPS/2)))
 
-  print("finished!")
+  print("😌")
 
 #####################################################
 # example
