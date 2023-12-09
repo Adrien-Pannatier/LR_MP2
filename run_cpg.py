@@ -48,12 +48,15 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
-ADD_CARTESIAN_PD = False
+ADD_CARTESIAN_PD = True
 TIME_STEP = 0.001
 FOOT_Y = 0.0838 # this is the hip length 
 SIDESIGN = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negative)
 
-env = QuadrupedGymEnv(render=False,              # visualize
+def rotation_matrix(theta):
+	return np.array([ [np.cos(theta), -np.sin(theta) ], [np.sin(theta), np.cos(theta)] ])
+
+env = QuadrupedGymEnv(render=True,              # visualize
                     on_rack=False,              # useful for debugging! 
                     isRLGymInterface=False,     # not using RL
                     time_step=TIME_STEP,
@@ -93,7 +96,7 @@ theta_dot = np.zeros((4, TEST_STEPS))
 # only Joint_PD: kp = np.array([385,385,385]), kd = np.array([2.6, 2.6, 2.6])
 
 class Hyperparameters:
-   def __init__(self, kp=np.array([385, 385, 385]), kd=np.array([2.6, 2.6, 2.6]), kp_cart=np.diag([260]*3), kd_cart=np.diag([15]*3)) -> None:
+   def __init__(self, kp=np.array([385, 385, 385]), kd=np.array([2.6, 2.6, 2.6]), kp_cart=np.diag([160]*3), kd_cart=np.diag([15]*3)) -> None:
       self.kp = kp
       self.kd = kd
       self.kp_cart = kp_cart
@@ -167,7 +170,14 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
 
     # send torques to robot and simulate TIME_STEP seconds 
     env.step(action) 
-    linear_vel.append(env.robot.GetBaseLinearVelocity())
+    # print('BodyOri: ',env.robot.GetBaseOrientationRollPitchYaw())
+    # env.robot.GetBaseOrientationRollPitchYaw() * 180 / np.pi # converts to radians
+    # yaw = env.robot.GetBaseOrientationRollPitchYaw()[2] - 90
+    # print('yaw', yaw)
+    # print('RobotOri', env.robot.GetBaseOrientationRollPitchYaw() * [np.cos(yaw), np.sin(yaw), 0])
+    # print('BodyLinVel', env.robot.GetBaseLinearVelocity())
+    # print('RobotLinVel', env.robot.GetBaseLinearVelocity() * [np.cos(yaw), np.sin(yaw), 0])
+
 
   ###############################################################################################
   ####################################----RETURNS----############################################

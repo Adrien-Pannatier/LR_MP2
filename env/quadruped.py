@@ -218,7 +218,7 @@ class Quadruped(object):
     ]
     motor_velocities = np.multiply(motor_velocities, self._motor_direction)
     return motor_velocities
-
+  
   def GetMotorTorques(self):
     """Get the torques the motors are exerting.
 

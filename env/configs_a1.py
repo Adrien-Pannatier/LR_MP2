@@ -52,6 +52,7 @@ INIT_POSITION = [0, 0, 0.305]  # normal initial height
 IS_FALLEN_HEIGHT = 0.18        # height at which robot is considered fallen
 
 INIT_ORIENTATION = (0, 0, 0, 1) 
+# INIT_ORIENTATION = (0, 0, 0.707, 0.707) 
 _, INIT_ORIENTATION_INV = pyb.invertTransform(
         position=[0, 0, 0], orientation=INIT_ORIENTATION)
 
@@ -91,8 +92,8 @@ NOMINAL_FOOT_POS_LEG_FRAME = np.array([ 0, -HIP_LINK_LENGTH, -0.25,
 # Actuation limits/gains, position, and velocity limits
 ##################################################################################
 # joint limits on real system
-UPPER_ANGLE_JOINT = np.array([ 0.802851455917,  4.18879020479, -0.916297857297 ] * NUM_LEGS)
-LOWER_ANGLE_JOINT = np.array([-0.802851455917, -1.0471975512 , -2.69653369433  ] * NUM_LEGS)
+# UPPER_ANGLE_JOINT = np.array([ 0.802851455917,  4.18879020479, -0.916297857297 ] * NUM_LEGS)
+# LOWER_ANGLE_JOINT = np.array([-0.802851455917, -1.0471975512 , -2.69653369433  ] * NUM_LEGS)
 
 # modified range in simulation (min observation space for RL)
 UPPER_ANGLE_JOINT = np.array([ 0.2,  DEFAULT_THIGH_ANGLE + 0.4, DEFAULT_CALF_ANGLE + 0.4 ] * NUM_LEGS)
@@ -100,7 +101,7 @@ LOWER_ANGLE_JOINT = np.array([-0.2,  DEFAULT_THIGH_ANGLE - 0.4, DEFAULT_CALF_ANG
 
 # torque and velocity limits 
 TORQUE_LIMITS   = np.asarray( [33.5] * NUM_MOTORS )
-VELOCITY_LIMITS = np.asarray( [15.0] * NUM_MOTORS ) 
+VELOCITY_LIMITS = np.asarray( [12.0] * NUM_MOTORS ) 
 
 # Sample Base Angular Limits for velocities
 LOWER_ANG_VEL_LIM = np.array([-3.0, -3.0, -10.0])
@@ -110,6 +111,9 @@ UPPER_ANG_VEL_LIM = np.array([3.0, 3.0, 10.0])
 LOWER_LIN_VEL_LIM = np.array([-0.5, -0.2, -0.2])
 UPPER_LIN_VEL_LIM = np.array([0.5, 0.2, 0.2])
 
+
+# LOWER_BASE_POS_LIM = np.array([-0.5, -0.2, 0.3])
+# UPPER_BASE_POS_LIM = np.array([0.5, 0.2, 0.4])
 LOWER_BASE_POS_LIM = 0.3
 UPPER_BASE_POS_LIM = 0.4
 ##### CPG Limits
