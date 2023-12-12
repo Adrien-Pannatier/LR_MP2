@@ -48,7 +48,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
-ADD_CARTESIAN_PD = True
+ADD_CARTESIAN_PD = False
 TIME_STEP = 0.001
 FOOT_Y = 0.0838 # this is the hip length 
 SIDESIGN = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negative)
@@ -61,7 +61,7 @@ env = QuadrupedGymEnv(render=True,              # visualize
                     isRLGymInterface=False,     # not using RL
                     time_step=TIME_STEP,
                     action_repeat=1,
-                    motor_control_mode="TORQUE",
+                    motor_control_mode="CARTESIAN_PD",
                     add_noise=False,    # start in ideal conditions
                     # record_video=True
                     )
@@ -70,7 +70,7 @@ labels_positions = np.array(["x", "y", "z"])
 labels_joint = np.array(["hip", "thigh", "calf"])
 save_plots = False
 # initialize Hopf Network, supply gait
-cpg = HopfNetwork(time_step=TIME_STEP, gait='TROT')
+cpg = HopfNetwork(time_step=TIME_STEP, gait='TROT', use_RL=False)
 
 TEST_STEPS = int(5 / (TIME_STEP))
 
@@ -91,12 +91,12 @@ theta = np.zeros((4, TEST_STEPS))
 theta_dot = np.zeros((4, TEST_STEPS))
 ####
 # Optimal kp and kd depending on situations:
-# only Cartesian_PD: kp_cart = np.diag([450]*3), kd_cart = np.diag([16]*3)
+# only Cartesian_PD: kp_cart = np.diag([450]*3), kd_cart = np.diag([16]*3) 
 # both PDs: kp = np.array([385,385,385]), kd = np.array([2.6, 2.6, 2.6]), kp_cart = np.diag([260]*3), kd_cart = np.diag([15]*3)
-# only Joint_PD: kp = np.array([385,385,385]), kd = np.array([2.6, 2.6, 2.6])
+# only Joint_PD: kp = np.array([385,385,385]), kd = np.array([2.6, 2.6, 2.6]) kp=np.array([200, 200, 200]), kd=np.array([5.6, 5.6, 5.6])
 
 class Hyperparameters:
-   def __init__(self, kp=np.array([385, 385, 385]), kd=np.array([2.6, 2.6, 2.6]), kp_cart=np.diag([160]*3), kd_cart=np.diag([15]*3)) -> None:
+   def __init__(self, kp=np.array([200, 200, 200]), kd=np.array([5.6, 5.6, 5.6]), kp_cart=np.diag([260]*3), kd_cart=np.diag([15]*3)) -> None:
       self.kp = kp
       self.kd = kd
       self.kp_cart = kp_cart
@@ -170,7 +170,7 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
 
     # send torques to robot and simulate TIME_STEP seconds 
     env.step(action) 
-    # print('BodyOri: ',env.robot.GetBaseOrientationRollPitchYaw())
+    print('BodyOri: ',env.robot.GetContactInfo()[2])
     # env.robot.GetBaseOrientationRollPitchYaw() * 180 / np.pi # converts to radians
     # yaw = env.robot.GetBaseOrientationRollPitchYaw()[2] - 90
     # print('yaw', yaw)

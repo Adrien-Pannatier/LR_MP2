@@ -101,7 +101,7 @@ LOWER_ANGLE_JOINT = np.array([-0.2,  DEFAULT_THIGH_ANGLE - 0.4, DEFAULT_CALF_ANG
 
 # torque and velocity limits 
 TORQUE_LIMITS   = np.asarray( [33.5] * NUM_MOTORS )
-VELOCITY_LIMITS = np.asarray( [12.0] * NUM_MOTORS ) 
+VELOCITY_LIMITS = np.asarray( [8.0] * NUM_MOTORS ) 
 
 # Sample Base Angular Limits for velocities
 LOWER_ANG_VEL_LIM = np.array([-3.0, -3.0, -10.0])
@@ -111,32 +111,35 @@ UPPER_ANG_VEL_LIM = np.array([3.0, 3.0, 10.0])
 LOWER_LIN_VEL_LIM = np.array([-0.5, -0.2, -0.2])
 UPPER_LIN_VEL_LIM = np.array([0.5, 0.2, 0.2])
 
+UPPER_BASE_POS = [15.0, 15.0, 3.5]
+LOWER_BASE_POS = [-15.0, -15.0, 2.7]
 
-# LOWER_BASE_POS_LIM = np.array([-0.5, -0.2, 0.3])
-# UPPER_BASE_POS_LIM = np.array([0.5, 0.2, 0.4])
+LOWER_CONTACT_F = np.array([-0.5, -0.2, 0.3])
+UPPER_CONTACT_F = np.array([0.5, 0.2, 0.4])
+
 LOWER_BASE_POS_LIM = 0.3
 UPPER_BASE_POS_LIM = 0.4
 ##### CPG Limits
 
 # CPG R Limits
-LOWER_CPG_R_LIM = np.array([0.0, 0.0, 0.0, 0.0]) # to verify, paper states mu [1.0 -> 2.0]
-UPPER_CPG_R_LIM = np.array([5.0, 5.0, 5.0, 5.0])
+LOWER_CPG_R_LIM = np.array([0.9, 0.9, 0.9, 0.9]) # to verify, paper states mu [1.0 -> 2.0]
+UPPER_CPG_R_LIM = np.array([2.1, 2.1, 2.1, 2.1])
 
 # CPG Theta Limits
 LOWER_CPG_THETA_LIM = np.array([0.0, 0.0, 0.0, 0.0]) #
 UPPER_CPG_THETA_LIM = np.array([2*np.pi, 2*np.pi, 2*np.pi, 2*np.pi])
 
 # CPG DR Limits
-LOWER_CPG_DR_LIM = -np.array([10.0, 10.0, 10.0, 10.0])
-UPPER_CPG_DR_LIM = np.array([10.0, 10.0, 10.0, 10.0])
+LOWER_CPG_DR_LIM = -np.array([5.0, 5.0, 5.0, 5.0])
+UPPER_CPG_DR_LIM = np.array([5.0, 5.0, 5.0, 5.0])
 
 # CPG DTHETA Limits
 LOWER_CPG_DTHETA_LIM = -np.array([10.0, 10.0, 10.0, 10.0])
 UPPER_CPG_DTHETA_LIM = np.array([10.0, 10.0, 10.0, 10.0])
 
 # Sample Joint Gains
-MOTOR_KP = [100.0, 100.0, 100.0] * NUM_LEGS
-MOTOR_KD = [2.0, 2.0, 2.0] * NUM_LEGS
+MOTOR_KP = [200.0, 200.0, 200.0] * NUM_LEGS
+MOTOR_KD = [5.6, 5.6, 5.6] * NUM_LEGS
 
 # MOTOR_KP = [55,55,55] * NUM_LEGS
 # MOTOR_KD = [0.8,0.8,0.8] * NUM_LEGS
@@ -145,8 +148,8 @@ MOTOR_KD = [2.0, 2.0, 2.0] * NUM_LEGS
 # kpCartesian = np.diag([500,500,500])
 # kdCartesian = np.diag([10,10,10])
 
-kpCartesian = np.diag([700,700,700])
-kdCartesian = np.diag([12,12,12])
+kpCartesian = np.diag([260,260,260])
+kdCartesian = np.diag([15,15,15])
 
 # for simulation only 
 # kpCartesian = np.diag([1000,1000,1000])

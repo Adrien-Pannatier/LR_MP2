@@ -58,7 +58,7 @@ from utils.file_utils import get_latest_model, load_all_results
 LEARNING_ALG = "PPO"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '120123143305'
-log_dir = interm_dir + '120823001032'
+log_dir = interm_dir + '121223082022'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
@@ -101,12 +101,22 @@ episode_reward = 0
 for i in range(2000):
     action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
     obs, rewards, dones, info = env.step(action)
+    
     episode_reward += rewards
     if dones:
         print('episode_reward', episode_reward)
         print('Final base position', info[0]['base_pos'])
         episode_reward = 0
 
+    curr_dist_to_goal, angle = env.envs[0].env.get_distance_and_angle_to_goal()
+    lin_vel_x, lin_vel_y, null_vel_z = env.envs[0].env.robot.GetBaseLinearVelocity() * [np.cos(angle), np.sin(angle), 0]
+
+    des_vel_x, des_vel_y = env.envs[0].env.GetBaseLinearVelocityToGoal(angle, 0.5)
+    # des_vel_x, des_vel_y, des_vel_z = 0.5 * np.array([np.cos(angle), np.sin(angle), 0])
+    print('lin_x', lin_vel_x, 'lin_y', lin_vel_y, 'ang', angle)
+    print('des_x', des_vel_x, 'des_y', des_vel_y)
+    # print(env.envs[0].env.robot.GetBasePosition())
+    # print('Base vel', env.robot.GetBaseVelocity())
     # [TODO] save data from current robot states for plots 
     # To get base position, for example: env.envs[0].env.robot.GetBasePosition() 
     #

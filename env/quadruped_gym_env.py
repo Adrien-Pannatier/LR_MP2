@@ -50,7 +50,7 @@ random.seed(10)
 import quadruped
 import configs_a1 as robot_config
 from hopf_network import HopfNetwork
-
+cmpt = 0
 # few helpers 
 def unit_vector(vector):
 	""" Returns the unit vector of the vector.  """
@@ -69,7 +69,7 @@ ACTION_EPS = 0.01
 OBSERVATION_EPS = 0.01
 VIDEO_LOG_DIRECTORY = 'videos/' + datetime.datetime.now().strftime("vid-%Y-%m-%d-%H-%M-%S-%f")
 
-DES_HEIGHT_Z = 0.34
+DES_HEIGHT_Z = 0.315
 DES_VEL_X = 0.5
 
 # CPG quantities
@@ -183,7 +183,8 @@ class QuadrupedGymEnv(gym.Env):
     self._using_competition_env = competition_env
     self.goal_id = None
     self.previous_contact_info = [1, 1, 1, 1]
-    self.time_in_air = [0, 0, 0, 0]
+    self.nb_goals_reached = 0
+    self.cmpt = 0
     if competition_env:
       test_env = False
       self._using_test_env = False
@@ -311,26 +312,16 @@ class QuadrupedGymEnv(gym.Env):
       observation_high = (np.concatenate((self._robot_config.UPPER_ANGLE_JOINT,
                                          self._robot_config.VELOCITY_LIMITS, # to control high velocity of the joints
                                          np.array([1.0]*4), # quaternions
+                                         self._robot_config.UPPER_BASE_POS,
                                          self._robot_config.UPPER_ANG_VEL_LIM, # control base ang velocity to essentially have it in x direction
-                                         self._robot_config.UPPER_LIN_VEL_LIM, # control base ang velocity to essentially have it in x direction
-                                        #  -self._robot_config.UPPER_BASE_POS_LIM, # to control z height
-                                         np.array([1.0]*4), # Contact booleans
-                                         self._robot_config.UPPER_CPG_R_LIM,
-                                         self._robot_config.UPPER_CPG_DR_LIM,
-                                         self._robot_config.UPPER_CPG_THETA_LIM,
-                                         self._robot_config.UPPER_CPG_DTHETA_LIM)) +  OBSERVATION_EPS)
+                                         np.array([100.0]*4))) +  OBSERVATION_EPS)
       
       observation_low = (np.concatenate((self._robot_config.LOWER_ANGLE_JOINT,
                                          -self._robot_config.VELOCITY_LIMITS,
                                          np.array([-1.0]*4), # quaternions
+                                         self._robot_config.LOWER_BASE_POS,
                                          self._robot_config.LOWER_ANG_VEL_LIM, # control base ang velocity to essentially have it in x direction
-                                         self._robot_config.LOWER_LIN_VEL_LIM, # control base ang velocity to essentially have it in x direction
-                                        #  -self._robot_config.LOWER_BASE_POS_LIM, # to control z height
-                                         np.array([0.0]*4), # Contact booleans
-                                         self._robot_config.LOWER_CPG_R_LIM,
-                                         self._robot_config.LOWER_CPG_DR_LIM,
-                                         self._robot_config.LOWER_CPG_THETA_LIM,
-                                         self._robot_config.LOWER_CPG_DTHETA_LIM)) -  OBSERVATION_EPS)
+                                         np.array([0.0]*4))) -  OBSERVATION_EPS)
     
     else:
       raise ValueError("observation space not defined or not intended")
@@ -397,14 +388,9 @@ class QuadrupedGymEnv(gym.Env):
       self._observation = np.concatenate((self.robot.GetMotorAngles(),
                                           self.robot.GetMotorVelocities(), # to control high velocity
                                           self.robot.GetBaseOrientation(),
-                                          self.robot.GetTrueBaseLinearVelocity(),
+                                          self.robot.GetBasePosition(), # get base position
                                           self.robot.GetBaseAngularVelocity(),
-                                          # self.robot.GetBasePosition()[2], # to control z height
-                                          self.robot.GetContactInfo()[3],
-                                          self._cpg.get_r(),
-                                          self._cpg.get_dr(),
-                                          self._cpg.get_theta(),
-                                          self._cpg.get_dtheta(),
+                                          self.robot.GetContactInfo()[2], # get normal forces
                                           ))
 
     else:
@@ -448,12 +434,13 @@ class QuadrupedGymEnv(gym.Env):
   def _reward_fwd_locomotion(self, des_vel_x=0.5):
     """Learn forward locomotion at a desired velocity. """
     # track the desired velocity 
-    vel_tracking_reward_x = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetTrueBaseLinearRate()[0] - des_vel_x)**2 )
-    vel_tracking_reward_y = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetTrueBaseLinearRate()[1])**2 )
+    # vel_tracking_reward_x = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetTrueBaseLinearRate()[0] - des_vel_x)**2 )
+    # vel_tracking_reward_y = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetTrueBaseLinearRate()[1])**2 )
+    # vel_tracking_reward_z = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetTrueBaseLinearRate()[2])**2 )
     ang_vel_tracking_reward = 0.025 * np.exp(-1/ 0.25 * (self.robot.GetBaseAngularVelocity()[2])**2)
-    lin_vel_pen = - 0.1 * np.abs(self.robot.GetTrueBaseLinearRate()[2]**2)
-    ang_r_vel_pen = - 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[0]**2)
-    ang_p_vel_pen = - 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[1]**2)
+    # lin_vel_pen = - 0.1 * np.abs(self.robot.GetTrueBaseLinearRate()[2]**2)
+    ang_r_vel_pen = 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[0]**2)
+    ang_p_vel_pen = 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[1]**2)
 
     # minimize yaw (go straight)
     # yaw_reward = -0.2 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[2]) 
@@ -466,12 +453,9 @@ class QuadrupedGymEnv(gym.Env):
     for tau,vel in zip(self._dt_motor_torques,self._dt_motor_velocities):
       energy_reward += np.abs(np.dot(tau,vel)) * self._time_step
       motor_vel_pen += - 0.0001 * np.abs(vel).sum()**2
-    reward = vel_tracking_reward_x \
-            + vel_tracking_reward_y \
-            + ang_vel_tracking_reward \
-            + lin_vel_pen \
-            + ang_r_vel_pen \
-            + ang_p_vel_pen \
+    reward = ang_vel_tracking_reward \
+            - ang_r_vel_pen \
+            - ang_p_vel_pen \
             - 0.01 * energy_reward \
             + 0.0004 * motor_vel_pen \
             # - 0.1 * np.linalg.norm(self.robot.GetBaseOrientation() - np.array([0,0,0,1]))
@@ -500,117 +484,142 @@ class QuadrupedGymEnv(gym.Env):
     return dist_to_goal, angle
   
   def _reward_flag_run(self):
-    """ Learn to move towards goal location. """
+    """ Learn to move towards goal location, second version. """
+    des_vel_x = 0.5
     # penalize pitch and roll
-    roll_pen = 0.08 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[0]**2)
-    pitch_pen = 0.08 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[1]**2)
-    vel_z_pen = 0.01 * self.robot.GetBaseLinearVelocity()[2] ** 2
-    # z_height_tracking_reward = 0.05 * np.exp(-1/ 0.25 *  (self.robot.GetBasePosition()[2] - DES_HEIGHT_Z)**2)
+    roll_pen = 0.08 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[0]**2) #1
+    pitch_pen = 0.08 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[1]**2) #2
+    vel_z_pen = 0.08 * self.robot.GetBaseLinearVelocity()[2] ** 2 #3
+    # vel_x, vel_y, vel_z self.robot.GetBaseLinearVelocity()
     curr_dist_to_goal, angle = self.get_distance_and_angle_to_goal()
-
+    lin_vel_x, lin_vel_y = self.get_robot_lin_vel()
+    nom_desired_vel = 0.5
+    goal_vel_x, goal_vel_y = self.GetBaseLinearVelocityToGoal(angle, nom_desired_vel)
+    vel_x_goal_tracking = 0.05 * np.exp(-1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[0] - goal_vel_x)**2) #10
+    vel_y_goal_tracking = 0.05 * np.exp(-1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[1] - goal_vel_y)**2) #11
+    # vel_x_tracking = 0.05 * np.exp(-1/ 0.25 *  (lin_vel_x- des_vel_x)**2) # wants positive x vel #4
+    # vel_y_tracking = 0.05 * np.exp(-1/ 0.25 *  (lin_vel_y**2)) # wants zero y vel #5
+    z_height_tracking =  0.05 * np.exp(-1/ 0.25 *  (self.robot.GetBasePosition()[2] - DES_HEIGHT_Z)**2) #6
+    # reward for reaching a goal:
+    # goal_reached_reward = 0.1 * self.nb_goals_reached
+    
     # minimize distance to goal (we want to move towards the goal)
-    dist_reward = 10 * (self._prev_pos_to_goal - curr_dist_to_goal)
-    # minimize yaw deviation to goal (necessary?)
-    # yaw_pen = -0.05 * np.abs(angle) 
-    # angle_tracking_reward = 0.05 * np.exp(-1 / 0.25 * (angle) ** 2)
-
-    # minimize energy 
+    dist_reward = 20 * (self._prev_pos_to_goal - curr_dist_to_goal) #7
+    angle_pen = 0.2 * np.abs(angle) #8
+    # minimize energy #9
     energy_pen = 0 
 
     for tau,vel in zip(self._dt_motor_torques,self._dt_motor_velocities):
-      energy_pen += np.abs(np.dot(tau,vel)) * self._time_step
+      energy_pen += np.abs(np.dot(tau,vel)) * self._time_step 
+    energy_pen = 0.001 * energy_pen
 
-    reward = dist_reward \
-            - 0.001 * energy_pen \
+    reward = vel_z_pen \
             - roll_pen \
             - pitch_pen \
-            - vel_z_pen
+            - energy_pen \
+            + z_height_tracking \
 
     return max(reward,0) # keep rewards positive
-  
-  def calculate_time_in_air(self):
-    current_contact_info = self.robot.GetContactInfo()[3]
-
-    # Iterate through each foot
-    for i in range(4):
-        # Check if current state is different from previous state
-        if current_contact_info[i] != self.previous_contact_info[i]:
-            # If foot is in air (0) now
-            if current_contact_info[i] == 0:
-                # Increment time in air for this foot
-                self.time_in_air[i] += 1  # Assuming a timestep of 1 unit
-
-    # Update previous contact info for the next iteration
-    self.previous_contact_info = current_contact_info
-
-    return self.time_in_air
   
   def get_robot_lin_vel(self):
     yaw = self.robot.GetBaseOrientationRollPitchYaw()[2]
     lin_vel_x, lin_vel_y, null_vel_z = self.robot.GetBaseLinearVelocity() * [np.cos(yaw), np.sin(yaw), 0]
     return lin_vel_x, lin_vel_y
   
+  def GetBaseLinearVelocityToGoal(self, angle_to_goal, nom_desired_vel):
+    """ Helper to return linear velocity to goal. """
+    lin_vel_x, lin_vel_y, null_vel_z = nom_desired_vel * np.array([np.cos(angle_to_goal), np.sin(angle_to_goal), 0])
+    return lin_vel_x, lin_vel_y
+
   def reward_flag_y_run_y(self):
     """ Learn to move towards goal location, second version. """
     des_vel_x = 0.5
     # penalize pitch and roll
     roll_pen = 0.08 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[0]**2) #1
     pitch_pen = 0.08 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[1]**2) #2
-    vel_z_pen = 0.01 * self.robot.GetBaseLinearVelocity()[2] ** 2 #3
-    lin_vel_x, lin_vel_y = self.get_robot_lin_vel()
-    vel_x_tracking = 0.05 * np.exp(-1/ 0.25 *  (lin_vel_x- des_vel_x)**2) # wants positive x vel #4
-    vel_y_tracking = 0.06 * np.exp(-1/ 0.25 *  (lin_vel_y**2)) # wants zero y vel #5
-    z_height_tracking =  0.05 * np.exp(-1/ 0.25 *  (self.robot.GetBasePosition()[2] - DES_HEIGHT_Z)**2) #6
-
+    vel_z_pen = 0.08 * self.robot.GetBaseLinearVelocity()[2] ** 2 #3
+    # vel_x, vel_y, vel_z self.robot.GetBaseLinearVelocity()
     curr_dist_to_goal, angle = self.get_distance_and_angle_to_goal()
+    lin_vel_x, lin_vel_y = self.get_robot_lin_vel()
+    nom_desired_vel = 0.5
+    goal_vel_x, goal_vel_y = self.GetBaseLinearVelocityToGoal(angle, nom_desired_vel)
+    vel_x_goal_tracking = 0.05 * np.exp(-1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[0] - goal_vel_x)**2) #10
+    vel_y_goal_tracking = 0.05 * np.exp(-1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[1] - goal_vel_y)**2) #11
+    # vel_x_tracking = 0.05 * np.exp(-1/ 0.25 *  (lin_vel_x- des_vel_x)**2) # wants positive x vel #4
+    # vel_y_tracking = 0.05 * np.exp(-1/ 0.25 *  (lin_vel_y**2)) # wants zero y vel #5
+    z_height_tracking =  0.05 * np.exp(-1/ 0.25 *  (self.robot.GetBasePosition()[2] - DES_HEIGHT_Z)**2) #6
+    # reward for reaching a goal:
+    # goal_reached_reward = 0.1 * self.nb_goals_reached
     
     # minimize distance to goal (we want to move towards the goal)
     dist_reward = 20 * (self._prev_pos_to_goal - curr_dist_to_goal) #7
-    angle_pen = 0.05 * np.abs(angle) #8
+    angle_pen = 0.2 * np.abs(angle) #8
     # minimize energy #9
     energy_pen = 0 
 
     for tau,vel in zip(self._dt_motor_torques,self._dt_motor_velocities):
       energy_pen += np.abs(np.dot(tau,vel)) * self._time_step 
+    energy_pen = 0.001 * energy_pen
 
     reward = dist_reward \
-            - 0.001 * energy_pen \
-            + vel_x_tracking \
-            + vel_y_tracking \
             - vel_z_pen \
             - roll_pen \
             - pitch_pen \
-            + z_height_tracking 
-    
+            - energy_pen \
+            + z_height_tracking \
+            + vel_x_goal_tracking \
+            + vel_y_goal_tracking
+    #123789 
+    #1237891011
+    # if self.cmpt % 5000 == 1:
+    #   print("dist_reward:", dist_reward)
+    #   print("vel_x_tracking_reward:", vel_x_tracking)
+    #   print("vel_y_tracking_reward:", vel_y_tracking)
+    #   print("vel_z_pen:", vel_z_pen)
+    #   print("roll_pen:", roll_pen)
+    #   print("pitch_pen:", pitch_pen)
+    #   print("energy_pen:", energy_pen)
+    #   print("angle_pen:", angle_pen)
+    #   print("goal_reached_reward:", goal_reached_reward)
+
+    self.cmpt += 1
     return max(reward,0) # keep rewards positive
 
   def _reward_lr_course(self):
     """ Implement your reward function here. How will you improve upon the above? """
-    vel_x_tracking_reward = 0.05 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[0] - DES_VEL_X)**2 )
-    vel_y_tracking_reward = 0.06 * np.exp( -1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[1])**2 )
-    ang_vel_tracking_reward = 0.029 * np.exp(-1/ 0.25 * (self.robot.GetBaseAngularVelocity()[2])**2)
-    lin_vel_pen = - 0.1 * np.abs(self.robot.GetBaseLinearVelocity()[2]**2)
-    ang_r_vel_pen = - 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[0]**2)
-    ang_p_vel_pen = - 0.01 * np.abs(self.robot.GetBaseAngularVelocity()[1]**2)
-    z_height_tracking_reward = 0.05 * np.exp(-1/ 0.25 *  (self.robot.GetBasePosition()[2] - DES_HEIGHT_Z)**2 )
-    # nb_collisions_pen = - 0.0001 * self.robot.GetContactInfo()[1]
-
-    energy_reward = 0 
+    vel_x_tracking_reward = 0.05 * np.exp(-1/0.25 * (self.robot.GetBaseLinearVelocity()[0] - DES_VEL_X)**2)
+    vel_y_tracking_reward = 0.06 * np.exp(-1/0.25 * (self.robot.GetBaseLinearVelocity()[1])**2)
+    ang_vel_tracking_reward = 0.029 * np.exp(-1/0.25 * (self.robot.GetBaseAngularVelocity()[2])**2)
+    lin_vel_pen = -0.1 * np.abs(self.robot.GetBaseLinearVelocity()[2]**2)
+    ang_r_vel_pen = -0.01 * np.abs(self.robot.GetBaseAngularVelocity()[0]**2)
+    ang_p_vel_pen = -0.01 * np.abs(self.robot.GetBaseAngularVelocity()[1]**2)
+    z_height_tracking_reward = 0.05 * np.exp(-1/0.25 * (self.robot.GetBasePosition()[2] - DES_HEIGHT_Z)**2)
+    energy_reward = 0
     motor_vel_pen = 0
 
-    for tau,vel in zip(self._dt_motor_torques,self._dt_motor_velocities):
-      energy_reward += np.abs(np.dot(tau,vel)) * self._time_step
-      motor_vel_pen += - 0.0001 * np.abs(vel).sum()**2
+    for tau, vel in zip(self._dt_motor_torques, self._dt_motor_velocities):
+      energy_reward += np.abs(np.dot(tau, vel)) * self._time_step
+      motor_vel_pen += -0.0001 * np.abs(vel).sum()**2
 
     reward = vel_x_tracking_reward \
-            + vel_y_tracking_reward \
-            + ang_vel_tracking_reward \
-            + lin_vel_pen \
-            + ang_r_vel_pen \
-            + ang_p_vel_pen \
-            + 0.0004 * motor_vel_pen \
-            
-    return max(reward,0) # keep rewards positive
+        + vel_y_tracking_reward \
+        + ang_vel_tracking_reward \
+        + lin_vel_pen \
+        + ang_r_vel_pen \
+        + ang_p_vel_pen \
+        + 0.0004 * motor_vel_pen
+
+    print("vel_x_tracking_reward:", vel_x_tracking_reward)
+    print("vel_y_tracking_reward:", vel_y_tracking_reward)
+    print("ang_vel_tracking_reward:", ang_vel_tracking_reward)
+    print("lin_vel_pen:", lin_vel_pen)
+    print("ang_r_vel_pen:", ang_r_vel_pen)
+    print("ang_p_vel_pen:", ang_p_vel_pen)
+    print("z_height_tracking_reward:", z_height_tracking_reward)
+    print("energy_reward:", energy_reward)
+    print("motor_vel_pen:", motor_vel_pen)
+
+    return max(reward, 0)  # keep rewards positive
 
   def _reward(self):
     """ Get reward depending on task"""
@@ -740,7 +749,7 @@ class QuadrupedGymEnv(gym.Env):
     self._dt_motor_torques = []
     self._dt_motor_velocities = []
     self._dt_foot_air_time = []
-    if "FLAGRUN" in self._TASK_ENV:
+    if "FLAGRUN" or "FLAGRUN_Y" in self._TASK_ENV:
       self._prev_pos_to_goal, _ = self.get_distance_and_angle_to_goal()
     
     for _ in range(self._action_repeat):
@@ -753,7 +762,6 @@ class QuadrupedGymEnv(gym.Env):
       self._sim_step_counter += 1
       self._dt_motor_torques.append(self.robot.GetMotorTorques())
       self._dt_motor_velocities.append(self.robot.GetMotorVelocities())
-      self._dt_foot_air_time.append(self.calculate_time_in_air())
 
       if self._is_render:
         self._render_step_helper()
@@ -765,10 +773,11 @@ class QuadrupedGymEnv(gym.Env):
     if self._termination() or self.get_sim_time() > self._MAX_EP_LEN:
       done = True
 
-    if "FLAGRUN" in self._TASK_ENV:
+    if "FLAGRUN" or "FLAGRUN_Y" in self._TASK_ENV:
       dist_to_goal, _ = self.get_distance_and_angle_to_goal()
       if dist_to_goal < 0.5:
         self._reset_goal()
+        self.nb_goals_reached += 1
 
     return np.array(self._noisy_observation()), reward, done, {'base_pos': self.robot.GetBasePosition()} 
 
