@@ -30,8 +30,6 @@
 
 """ Run CPG """
 import time
-import numpy as np
-import matplotlib
 
 # adapt as needed for your system
 # from sys import platform
@@ -39,8 +37,6 @@ import matplotlib
 #   matplotlib.use("Qt5Agg")
 # else:
 #   matplotlib.use('TkAgg')
-
-from matplotlib import pyplot as plt
 
 from env.hopf_network import HopfNetwork
 from env.quadruped_gym_env import QuadrupedGymEnv
@@ -55,26 +51,26 @@ SIDESIGN = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negati
 
 env = QuadrupedGymEnv(render=True,              # visualize
                     on_rack=False,              # useful for debugging! 
-                    isRLGymInterface=False,     # not using RL
+                    isRLGymInterface=False,     # noGt using RL
                     time_step=TIME_STEP,
                     action_repeat=1,
                     motor_control_mode="TORQUE",
                     add_noise=False,    # start in ideal conditions
-                    # record_video=True
+                    record_video=False
                     )
 
 labels_positions = np.array(["x", "y", "z"])
 labels_joint = np.array(["hip", "thigh", "calf"])
 save_plots = False
 # initialize Hopf Network, supply gait
-cpg = HopfNetwork(time_step=TIME_STEP, gait='TROT')
+cpg = HopfNetwork(time_step=TIME_STEP, gait="TROT")
 
 TEST_STEPS = int(5 / (TIME_STEP))
 
 t = np.arange(TEST_STEPS)*TIME_STEP
 
-start_plot = 3000
-end_plot = 4000
+start_plot = 10
+end_plot = 2000
 
 des_leg_pos = np.zeros((3, TEST_STEPS))
 act_leg_pos = np.zeros((3, TEST_STEPS))
@@ -87,14 +83,39 @@ r_dot = np.zeros((4, TEST_STEPS))
 theta = np.zeros((4, TEST_STEPS))
 theta_dot = np.zeros((4, TEST_STEPS))
 
+kp_in = 285
+kd_in = 2.2
+kp_cat_in = 260
+kd_cat_in = 15
+
 class Hyperparameters:
-   def __init__(self, kp=np.array([200,200,200]), kd=np.array([2.5, 2.5, 2.5]), kp_cart=np.diag([100]*3), kd_cart=np.diag([2.5]*3)) -> None:
+   def __init__(self, kp=np.array([kp_in,kp_in,kp_in]), kd=np.array([kd_in, kd_in, kd_in]), kp_cart=np.diag([kp_cat_in]*3), kd_cart=np.diag([kd_cat_in]*3)):
       self.kp = kp
       self.kd = kd
       self.kp_cart = kp_cart
       self.kd_cart = kd_cart
 
-def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
+def get_robot_lin_vel():
+  yaw = env.robot.GetBaseOrientationRollPitchYaw()[2]
+  lin_vel_x, lin_vel_y, null_vel_z = env.robot.GetBaseLinearVelocity() * [np.cos(yaw), np.sin(yaw), 0]
+  return lin_vel_x, lin_vel_y
+
+def compute_cost_of_transport(_dt_motor_torques, _dt_motor_velocities, positions, TIME_STEP):
+  energy = 0 
+  # compute power
+  for tau,vel in zip(_dt_motor_torques, _dt_motor_velocities):
+    energy += np.abs(np.dot(tau,vel)) * TIME_STEP
+
+  distance_traveled = np.linalg.norm(positions[-1] - positions[0])
+
+  print(env.robot.GetBaseMassFromURDF())
+
+  # compute cost of transport
+  cost_of_transport = energy / (env.robot.GetBaseMassFromURDF()[0] * 9.81 * distance_traveled)
+  return cost_of_transport
+  
+
+def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None, omega_stance = 2*np.pi*2, omega_swing = 5*np.pi*2):
 
   ############## Sample Gains
   # joint PD gains
@@ -104,8 +125,17 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
   kpCartesian = hyp.kp_cart
   kdCartesian = hyp.kd_cart
 
+  cpg._omega_stance = omega_stance
+  cpg._omega_swing = omega_swing
+
   # data to fill
   linear_vel = []
+
+  # for energy calculation
+  _dt_motor_torques = []
+  _dt_motor_velocities = []
+  positions = []
+
 
 
   for j in range(TEST_STEPS):
@@ -162,20 +192,66 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
       # Set tau for legi in action vector
       action[3*i:3*i+3] = tau
 
+      _dt_motor_torques.append(env.robot.GetMotorTorques())
+      _dt_motor_velocities.append(env.robot.GetMotorVelocities())
+      positions.append(env.robot.GetBasePosition())
 
     # send torques to robot and simulate TIME_STEP seconds 
     env.step(action) 
-    linear_vel.append(env.robot.GetBaseLinearVelocity())
+    if return_wanted == "vel":
+      linear_vel.append(env.robot.GetBaseLinearVelocity())
+    elif return_wanted == "robot_vel":
+      linear_vel.append(get_robot_lin_vel())
 
   ###############################################################################################
   ####################################----RETURNS----############################################
   ###############################################################################################
   
-  if return_wanted == "maxvel":
-     return linear_vel
+  if return_wanted == "vel" or return_wanted == "robot_vel":
+     return linear_vel  
+  elif return_wanted == "3.14":
+    # cycle/ratio results
+    
+    # step duration
+    step_duration = (cpg.stan + cpg._swing_period) / 2
+    # cycle duration
+    cycle_duration = step_duration * 4
+
+    # compute cycle duration
+    cycle_duration = step_duration * 4
+
+    # compute average speed
+    average_speed = np.mean(linear_vel, axis=0) * TIME_STEP
+
+    # compute average angular speed
+    average_angular_speed = np.mean(cpg.get_dtheta(), axis=1) * TIME_STEP
+
+    # compute average stride length
+    average_stride_length = average_speed * cycle_duration
+
+    # compute average stride frequency
+    average_stride_frequency = 1 / step_duration
+
+    # compute average angular stride frequency
+    average_angular_stride_frequency = 1 / (cpg._stance_period + cpg._swing_period)
+
+    # compute average angular stride length
+    average_angular_stride_length = average_angular_speed * cycle_duration
+
+    # compute average duty factor
+    average_duty_factor = cpg._stance_period / (cpg._stance_period + cpg._swing_period)
+
+    # compute average angular duty factor
+    average_angular_duty_factor = cpg._stance_period / (cpg._stance_period + cpg._swing_period)
+
+    # compute average cost of transport
+    average_cost_of_transport = np.mean(compute_cost_of_transport(_dt_motor_torques, _dt_motor_velocities, positions, TIME_STEP))
+
+    return average_speed, average_angular_speed, average_stride_length, average_stride_frequency, average_angular_stride_frequency, average_angular_stride_length, average_duty_factor, average_angular_duty_factor, average_cost_of_transport
+
   else:
      pass
-
+  
   ###############################################################################################
   ####################################-----PLOTS-----############################################
   ###############################################################################################
@@ -224,9 +300,10 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
     axs[1, 1].set_ylabel('Amplitude')
 
     fig.subplots_adjust(left=0.05, bottom=0.084, right=0.898, top=0.88, wspace = 0.171, hspace = 0.363)
-    plt.legend()
+    # plt.legend()
     handles, labels = axs[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, loc='upper right')
+
     ##### Value comparison between desired and real##################################
 
     fig = plt.figure(figsize =(10, 5))
@@ -272,4 +349,6 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
     plt.show()
 
 if __name__ == '__main__':
+    # run_cpg(omega_stance=1*np.pi*2, omega_swing=3*np.pi*2)
     run_cpg()
+   
