@@ -267,7 +267,7 @@ class QuadrupedGymEnv(gym.Env):
                                           self._robot_config.VELOCITY_LIMITS,
                                           np.array([1.0] * 4),                        #
                                           np.array([VX_MAX, VY_MAX, VZ_MAX]),     # base velocities
-                                          np.array([1.1] * 4),                     # foot contact positions
+                                          np.array([1.0] * 4),                     # foot contact positions
                                           np.array([5.0] * 3),                     # base angular velocities
                                           np.array([MU_UPP + 1] * 4),                     # limit for r
                                           np.array([rdot_max + 1] * 4),                   # limit for rdot
@@ -278,14 +278,14 @@ class QuadrupedGymEnv(gym.Env):
                                          -self._robot_config.VELOCITY_LIMITS,
                                          np.array([-1.0] * 4),
                                          np.array([-VX_MAX, -VY_MAX, -VZ_MAX]),   # base velocities
-                                         np.array([-1.0] * 4),                      # foot contact positions
+                                         np.array([0.0] * 4),                      # foot contact positions
                                          np.array([-5.0] * 3),                       # base angular velocities
                                          np.array([-1.0] * 4),                         # limit for r
                                          np.array([-1.0] * 4),                         # limit for rdot a changer)
                                          np.array([-1.0] * 4),                         # limit for theta
                                          np.array([-1.0] * 4),                         # limit for theta dots
                                          )) - OBSERVATION_EPS)
-      
+    
     elif self._observation_space_mode == "FLAGRUN_OBS":
       # [TODO] Set observation upper and lower ranges. What are reasonable limits? 
       # Note 50 is arbitrary below, you may have more or less
@@ -312,14 +312,12 @@ class QuadrupedGymEnv(gym.Env):
       observation_high = (np.concatenate((self._robot_config.UPPER_ANGLE_JOINT,
                                          self._robot_config.VELOCITY_LIMITS, # to control high velocity of the joints
                                          np.array([1.0]*4), # quaternions
-                                         self._robot_config.UPPER_BASE_POS,
                                          self._robot_config.UPPER_ANG_VEL_LIM, # control base ang velocity to essentially have it in x direction
                                          np.array([100.0]*4))) +  OBSERVATION_EPS)
       
       observation_low = (np.concatenate((self._robot_config.LOWER_ANGLE_JOINT,
                                          -self._robot_config.VELOCITY_LIMITS,
                                          np.array([-1.0]*4), # quaternions
-                                         self._robot_config.LOWER_BASE_POS,
                                          self._robot_config.LOWER_ANG_VEL_LIM, # control base ang velocity to essentially have it in x direction
                                          np.array([0.0]*4))) -  OBSERVATION_EPS)
     
@@ -355,7 +353,7 @@ class QuadrupedGymEnv(gym.Env):
                                           self.robot.GetBaseOrientation(),
                                           self.robot.GetBaseAngularVelocity(),
                                           self.robot.GetBaseLinearVelocity(),
-                                          self.robot.GetContactInfo()[3],
+                                          self.robot.GetContactInfo()[2],
                                           self._cpg.get_r(),
                                           self._cpg.get_dr(),
                                           self._cpg.get_theta(),
@@ -376,7 +374,7 @@ class QuadrupedGymEnv(gym.Env):
                                           self.robot.GetMotorVelocities(),
                                           self.robot.GetBaseOrientation(),
                                           self.robot.GetBaseLinearVelocity(),
-                                          self.robot.GetContactInfo()[3],
+                                          self.robot.GetContactInfo()[2],
                                           self.robot.GetBaseAngularVelocity(),
                                           self._cpg.get_r(),
                                           self._cpg.get_dr(),
@@ -388,7 +386,6 @@ class QuadrupedGymEnv(gym.Env):
       self._observation = np.concatenate((self.robot.GetMotorAngles(),
                                           self.robot.GetMotorVelocities(), # to control high velocity
                                           self.robot.GetBaseOrientation(),
-                                          self.robot.GetBasePosition(), # get base position
                                           self.robot.GetBaseAngularVelocity(),
                                           self.robot.GetContactInfo()[2], # get normal forces
                                           ))
@@ -487,9 +484,9 @@ class QuadrupedGymEnv(gym.Env):
     """ Learn to move towards goal location, second version. """
     des_vel_x = 0.5
     # penalize pitch and roll
-    roll_pen = 0.08 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[0]**2) #1
-    pitch_pen = 0.08 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[1]**2) #2
-    vel_z_pen = 0.08 * self.robot.GetBaseLinearVelocity()[2] ** 2 #3
+    roll_pen = 0.01 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[0]**2) #1
+    pitch_pen = 0.01 * np.abs(self.robot.GetBaseOrientationRollPitchYaw()[1]**2) #2
+    vel_z_pen = 0.01 * self.robot.GetBaseLinearVelocity()[2]** 2 #3
     # vel_x, vel_y, vel_z self.robot.GetBaseLinearVelocity()
     curr_dist_to_goal, angle = self.get_distance_and_angle_to_goal()
     lin_vel_x, lin_vel_y = self.get_robot_lin_vel()
@@ -497,8 +494,8 @@ class QuadrupedGymEnv(gym.Env):
     goal_vel_x, goal_vel_y = self.GetBaseLinearVelocityToGoal(angle, nom_desired_vel)
     vel_x_goal_tracking = 0.05 * np.exp(-1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[0] - goal_vel_x)**2) #10
     vel_y_goal_tracking = 0.05 * np.exp(-1/ 0.25 *  (self.robot.GetBaseLinearVelocity()[1] - goal_vel_y)**2) #11
-    # vel_x_tracking = 0.05 * np.exp(-1/ 0.25 *  (lin_vel_x- des_vel_x)**2) # wants positive x vel #4
-    # vel_y_tracking = 0.05 * np.exp(-1/ 0.25 *  (lin_vel_y**2)) # wants zero y vel #5
+    vel_x_tracking = 0.05 * np.exp(-1/ 0.25 *  ((self.robot.GetBaseLinearVelocity()[0]- des_vel_x)**2)) # wants positive x vel #4
+    vel_y_tracking = 0.05 * np.exp(-1/ 0.25 *  ((self.robot.GetBaseLinearVelocity()[1]**2))) # wants zero y vel #5
     z_height_tracking =  0.05 * np.exp(-1/ 0.25 *  (self.robot.GetBasePosition()[2] - DES_HEIGHT_Z)**2) #6
     # reward for reaching a goal:
     # goal_reached_reward = 0.1 * self.nb_goals_reached
@@ -513,7 +510,8 @@ class QuadrupedGymEnv(gym.Env):
       energy_pen += np.abs(np.dot(tau,vel)) * self._time_step 
     energy_pen = 0.001 * energy_pen
 
-    reward = vel_z_pen \
+    reward = dist_reward \
+            - vel_z_pen \
             - roll_pen \
             - pitch_pen \
             - energy_pen \

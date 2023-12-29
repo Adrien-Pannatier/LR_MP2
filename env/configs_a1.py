@@ -101,7 +101,7 @@ LOWER_ANGLE_JOINT = np.array([-0.2,  DEFAULT_THIGH_ANGLE - 0.4, DEFAULT_CALF_ANG
 
 # torque and velocity limits 
 TORQUE_LIMITS   = np.asarray( [33.5] * NUM_MOTORS )
-VELOCITY_LIMITS = np.asarray( [8.0] * NUM_MOTORS ) 
+VELOCITY_LIMITS = np.asarray( [15.0] * NUM_MOTORS ) 
 
 # Sample Base Angular Limits for velocities
 LOWER_ANG_VEL_LIM = np.array([-3.0, -3.0, -10.0])

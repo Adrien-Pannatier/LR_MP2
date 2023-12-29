@@ -48,7 +48,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
-ADD_CARTESIAN_PD = False
+ADD_CARTESIAN_PD = True
 TIME_STEP = 0.001
 FOOT_Y = 0.0838 # this is the hip length 
 SIDESIGN = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negative)
@@ -115,6 +115,12 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
   # data to fill
   linear_vel = []
 
+  min_angle_0 =  10.0
+  max_angle_0 = -10.0
+  min_angle_1 =  10.0
+  max_angle_1 = -10.0
+  min_angle_2 =  10.0
+  max_angle_2 = -10.0
   for j in range(TEST_STEPS):
     # initialize torque array to send to motors
     action = np.zeros(12) 
@@ -128,7 +134,6 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
     r_dot[:, j] = cpg.get_dr()
     theta[:, j] = cpg.get_theta()
     theta_dot[:, j] = cpg.get_dtheta()
-
     for i in range(4):
       # initialize torques for legi
       tau = np.zeros(3)
@@ -170,7 +175,29 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
 
     # send torques to robot and simulate TIME_STEP seconds 
     env.step(action) 
-    print('BodyOri: ',env.robot.GetContactInfo()[2])
+    # print('BodyOri: ',env.robot.GetContactInfo()[2])
+    motor_angles = env.robot.GetMotorAngles()
+    # print(len(env.robot.GetMotorTorques()))
+    # for i in range(len(motor_angles)):
+    # print(motor_angles[0])
+    if motor_angles[0] < min_angle_0:
+      min_angle_0 = motor_angles[0]
+    if motor_angles[0] > max_angle_0:
+      max_angle_0 = motor_angles[0]
+    if motor_angles[1] < min_angle_1:
+      min_angle_1 = motor_angles[1]
+    if motor_angles[1] > max_angle_1:
+      max_angle_1 = motor_angles[1]
+    if motor_angles[2] < min_angle_2:
+      min_angle_2 = motor_angles[2]
+    if motor_angles[2] > max_angle_2:
+      max_angle_2 = motor_angles[2]
+    print('min_angle_0', min_angle_0)
+    print('max_angle_0', max_angle_0)
+    print('min_angle_1', min_angle_1)
+    print('max_angle_1', max_angle_1)
+    print('min_angle_2', min_angle_2)
+    print('max_angle_2', max_angle_2)
     # env.robot.GetBaseOrientationRollPitchYaw() * 180 / np.pi # converts to radians
     # yaw = env.robot.GetBaseOrientationRollPitchYaw()[2] - 90
     # print('yaw', yaw)
