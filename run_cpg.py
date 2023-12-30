@@ -49,7 +49,7 @@ TIME_STEP = 0.001
 FOOT_Y = 0.0838 # this is the hip length 
 SIDESIGN = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negative)
 
-env = QuadrupedGymEnv(render=True,              # visualize
+env = QuadrupedGymEnv(render=False,              # visualize
                     on_rack=False,              # useful for debugging! 
                     isRLGymInterface=False,     # noGt using RL
                     time_step=TIME_STEP,
@@ -63,7 +63,7 @@ labels_positions = np.array(["x", "y", "z"])
 labels_joint = np.array(["hip", "thigh", "calf"])
 save_plots = False
 # initialize Hopf Network, supply gait
-cpg = HopfNetwork(time_step=TIME_STEP, gait="PACE")
+cpg = HopfNetwork(time_step=TIME_STEP, gait="TROT")
 
 TEST_STEPS = int(5 / (TIME_STEP))
 
@@ -83,9 +83,14 @@ r_dot = np.zeros((4, TEST_STEPS))
 theta = np.zeros((4, TEST_STEPS))
 theta_dot = np.zeros((4, TEST_STEPS))
 
-kp_in = 200
-kd_in = 2.5
-kp_cat_in = 260
+kp_in = 0
+kd_in = 0
+kp_cat_in = 0
+kd_cat_in = 0
+
+kp_in = 285
+kd_in = 2.2
+kp_cat_in = 450
 kd_cat_in = 15
 
 class Hyperparameters:
@@ -106,16 +111,17 @@ def compute_cost_of_transport(_dt_motor_torques, _dt_motor_velocities, positions
   for tau,vel in zip(_dt_motor_torques, _dt_motor_velocities):
     energy += np.abs(np.dot(tau,vel)) * TIME_STEP
 
-  distance_traveled = np.linalg.norm(positions[-1] - positions[0])
-
-  print(env.robot.GetBaseMassFromURDF())
+  # compute distance traveled
+  x1, y1, z1 = positions[0]
+  x2, y2, z2 = positions[-1]
+  distance_traveled = np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
   # compute cost of transport
   cost_of_transport = energy / (env.robot.GetBaseMassFromURDF()[0] * 9.81 * distance_traveled)
   return cost_of_transport
   
 
-def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None, omega_stance = 2*np.pi*2, omega_swing = 5*np.pi*2):
+def run_cpg(hyp = Hyperparameters(), do_plot = False, return_wanted = None, omega_stance = 1*np.pi*2, omega_swing = 3*np.pi*2):
 
   ############## Sample Gains
   # joint PD gains
@@ -128,10 +134,12 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None, omega
   cpg._omega_stance = omega_stance
   cpg._omega_swing = omega_swing
 
-  cpg._mu = 2.3
+  cpg._mu = 0.1
   # cpg._ground_clearance = 0.1
   # cpg._ground_penetration = 0.001
   # cpg._des_step_len = 0.1
+
+  return_wanted = "robot_vel"
 
   # data to fill
   linear_vel = []
@@ -211,51 +219,23 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None, omega
   ###############################################################################################
   ####################################----RETURNS----############################################
   ###############################################################################################
-  
-  if return_wanted == "vel" or return_wanted == "robot_vel":
-     return linear_vel  
-  elif return_wanted == "3.14":
-    # cycle/ratio results
-    
-    # step duration
-    step_duration = (cpg.stan + cpg._swing_period) / 2
-    # cycle duration
-    cycle_duration = step_duration * 4
+  print("\n")
+  if return_wanted == "vel":
+     # average of linear velocity in x in the 20 last steps
+    print(f"linear vel {np.mean(np.array(linear_vel[-20:])[:,0])}")
 
-    # compute cycle duration
-    cycle_duration = step_duration * 4
+  elif return_wanted == "robot_vel":
+    # average of linear velocity in x in the 20 last steps
+    print(f"robot linear vel {np.mean(np.array(linear_vel[-20:])[:,0])}")
 
-    # compute average speed
-    average_speed = np.mean(linear_vel, axis=0) * TIME_STEP
+  print(f"stance time {2*np.pi/cpg._omega_stance}")
+  print(f"swing time {2*np.pi/cpg._omega_swing}")
+  print(f"duty cycle ratio {cpg._omega_stance / (cpg._omega_stance + cpg._omega_swing)}")
+  print(f"step duration {((2*np.pi)/cpg._omega_stance + (2*np.pi)/cpg._omega_swing) / 2}")
 
-    # compute average angular speed
-    average_angular_speed = np.mean(cpg.get_dtheta(), axis=1) * TIME_STEP
-
-    # compute average stride length
-    average_stride_length = average_speed * cycle_duration
-
-    # compute average stride frequency
-    average_stride_frequency = 1 / step_duration
-
-    # compute average angular stride frequency
-    average_angular_stride_frequency = 1 / (cpg._stance_period + cpg._swing_period)
-
-    # compute average angular stride length
-    average_angular_stride_length = average_angular_speed * cycle_duration
-
-    # compute average duty factor
-    average_duty_factor = cpg._stance_period / (cpg._stance_period + cpg._swing_period)
-
-    # compute average angular duty factor
-    average_angular_duty_factor = cpg._stance_period / (cpg._stance_period + cpg._swing_period)
-
-    # compute average cost of transport
-    average_cost_of_transport = np.mean(compute_cost_of_transport(_dt_motor_torques, _dt_motor_velocities, positions, TIME_STEP))
-
-    return average_speed, average_angular_speed, average_stride_length, average_stride_frequency, average_angular_stride_frequency, average_angular_stride_length, average_duty_factor, average_angular_duty_factor, average_cost_of_transport
-
-  else:
-     pass
+  # compute average cost of transport
+  average_cost_of_transport = np.mean(compute_cost_of_transport(_dt_motor_torques, _dt_motor_velocities, positions, TIME_STEP))
+  print(f"average cost of transport {average_cost_of_transport}")
   
   ###############################################################################################
   ####################################-----PLOTS-----############################################
@@ -356,4 +336,3 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None, omega
 if __name__ == '__main__':
     # run_cpg(omega_stance=1/2*np.pi*2, omega_swing=3*np.pi*2)
     run_cpg()
-   
