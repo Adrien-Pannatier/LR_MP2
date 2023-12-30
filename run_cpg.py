@@ -63,7 +63,7 @@ labels_positions = np.array(["x", "y", "z"])
 labels_joint = np.array(["hip", "thigh", "calf"])
 save_plots = False
 # initialize Hopf Network, supply gait
-cpg = HopfNetwork(time_step=TIME_STEP, gait="TROT")
+cpg = HopfNetwork(time_step=TIME_STEP, gait="PACE")
 
 TEST_STEPS = int(5 / (TIME_STEP))
 
@@ -83,8 +83,8 @@ r_dot = np.zeros((4, TEST_STEPS))
 theta = np.zeros((4, TEST_STEPS))
 theta_dot = np.zeros((4, TEST_STEPS))
 
-kp_in = 285
-kd_in = 2.2
+kp_in = 200
+kd_in = 2.5
 kp_cat_in = 260
 kd_cat_in = 15
 
@@ -127,6 +127,11 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None, omega
 
   cpg._omega_stance = omega_stance
   cpg._omega_swing = omega_swing
+
+  cpg._mu = 2.3
+  # cpg._ground_clearance = 0.1
+  # cpg._ground_penetration = 0.001
+  # cpg._des_step_len = 0.1
 
   # data to fill
   linear_vel = []
@@ -261,7 +266,7 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None, omega
   if do_plot == True:
 
     fig, axs = plt.subplots(2, 2, figsize=(8, 8))
-    fig.suptitle('CPG States for trot gait')
+    fig.suptitle('CPG States for PACE gait')
 
     # Plot FL
     axs[0, 0].plot(t[start_plot:end_plot], r[0, start_plot:end_plot], label='r', color='royalblue')
@@ -349,6 +354,6 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None, omega
     plt.show()
 
 if __name__ == '__main__':
-    # run_cpg(omega_stance=1*np.pi*2, omega_swing=3*np.pi*2)
+    # run_cpg(omega_stance=1/2*np.pi*2, omega_swing=3*np.pi*2)
     run_cpg()
    
