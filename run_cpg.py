@@ -48,6 +48,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
+
 ADD_CARTESIAN_PD = True
 TIME_STEP = 0.001
 FOOT_Y = 0.0838 # this is the hip length 
@@ -56,12 +57,12 @@ SIDESIGN = np.array([-1, 1, -1, 1]) # get correct hip sign (body right is negati
 def rotation_matrix(theta):
 	return np.array([ [np.cos(theta), -np.sin(theta) ], [np.sin(theta), np.cos(theta)] ])
 
-env = QuadrupedGymEnv(render=True,              # visualize
+env = QuadrupedGymEnv(render=False,              # visualize
                     on_rack=False,              # useful for debugging! 
                     isRLGymInterface=False,     # not using RL
                     time_step=TIME_STEP,
                     action_repeat=1,
-                    motor_control_mode="CARTESIAN_PD",
+                    motor_control_mode="TORQUE",
                     add_noise=False,    # start in ideal conditions
                     # record_video=True
                     )
@@ -70,7 +71,7 @@ labels_positions = np.array(["x", "y", "z"])
 labels_joint = np.array(["hip", "thigh", "calf"])
 save_plots = False
 # initialize Hopf Network, supply gait
-cpg = HopfNetwork(time_step=TIME_STEP, gait='TROT', use_RL=False)
+cpg = HopfNetwork(time_step=TIME_STEP, gait='TROT')
 
 TEST_STEPS = int(5 / (TIME_STEP))
 
@@ -91,12 +92,12 @@ theta = np.zeros((4, TEST_STEPS))
 theta_dot = np.zeros((4, TEST_STEPS))
 ####
 # Optimal kp and kd depending on situations:
-# only Cartesian_PD: kp_cart = np.diag([450]*3), kd_cart = np.diag([16]*3) 
+# only Cartesian_PD: kp_cart = np.diag([450]*3), kd_cart = np.diag([16]*3)
 # both PDs: kp = np.array([385,385,385]), kd = np.array([2.6, 2.6, 2.6]), kp_cart = np.diag([260]*3), kd_cart = np.diag([15]*3)
-# only Joint_PD: kp = np.array([385,385,385]), kd = np.array([2.6, 2.6, 2.6]) kp=np.array([200, 200, 200]), kd=np.array([5.6, 5.6, 5.6])
+# only Joint_PD: kp = np.array([385,385,385]), kd = np.array([2.6, 2.6, 2.6])
 
 class Hyperparameters:
-   def __init__(self, kp=np.array([200, 200, 200]), kd=np.array([5.6, 5.6, 5.6]), kp_cart=np.diag([260]*3), kd_cart=np.diag([15]*3)) -> None:
+   def __init__(self,kp=np.array([200, 200, 200]), kd=np.array([5.6, 5.6, 5.6]), kp_cart=np.diag([260]*3), kd_cart=np.diag([15]*3)) -> None:
       self.kp = kp
       self.kd = kd
       self.kp_cart = kp_cart
@@ -114,13 +115,8 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
 
   # data to fill
   linear_vel = []
-
-  min_angle_0 =  10.0
-  max_angle_0 = -10.0
-  min_angle_1 =  10.0
-  max_angle_1 = -10.0
-  min_angle_2 =  10.0
-  max_angle_2 = -10.0
+  min_angle = 0.8
+  max_angle = -1.8 
   for j in range(TEST_STEPS):
     # initialize torque array to send to motors
     action = np.zeros(12) 
@@ -134,6 +130,7 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
     r_dot[:, j] = cpg.get_dr()
     theta[:, j] = cpg.get_theta()
     theta_dot[:, j] = cpg.get_dtheta()
+
     for i in range(4):
       # initialize torques for legi
       tau = np.zeros(3)
@@ -175,29 +172,17 @@ def run_cpg(hyp = Hyperparameters(), do_plot = True, return_wanted = None):
 
     # send torques to robot and simulate TIME_STEP seconds 
     env.step(action) 
-    # print('BodyOri: ',env.robot.GetContactInfo()[2])
-    motor_angles = env.robot.GetMotorAngles()
+    # motor_angles = env.robot.GetMotorTorques()
     # print(len(env.robot.GetMotorTorques()))
-    # for i in range(len(motor_angles)):
+    # # for i in range(len(motor_angles)):
     # print(motor_angles[0])
-    if motor_angles[0] < min_angle_0:
-      min_angle_0 = motor_angles[0]
-    if motor_angles[0] > max_angle_0:
-      max_angle_0 = motor_angles[0]
-    if motor_angles[1] < min_angle_1:
-      min_angle_1 = motor_angles[1]
-    if motor_angles[1] > max_angle_1:
-      max_angle_1 = motor_angles[1]
-    if motor_angles[2] < min_angle_2:
-      min_angle_2 = motor_angles[2]
-    if motor_angles[2] > max_angle_2:
-      max_angle_2 = motor_angles[2]
-    print('min_angle_0', min_angle_0)
-    print('max_angle_0', max_angle_0)
-    print('min_angle_1', min_angle_1)
-    print('max_angle_1', max_angle_1)
-    print('min_angle_2', min_angle_2)
-    print('max_angle_2', max_angle_2)
+    # if motor_angles[0] < min_angle:
+    #   min_angle = motor_angles[0]
+    # if motor_angles[0] > max_angle:
+    #   max_angle = motor_angles[0]
+    # print('min_angle', min_angle)
+    # print('max_angle', max_angle)
+    # print('BodyOri: ',env.robot.GetBaseOrientationRollPitchYaw())
     # env.robot.GetBaseOrientationRollPitchYaw() * 180 / np.pi # converts to radians
     # yaw = env.robot.GetBaseOrientationRollPitchYaw()[2] - 90
     # print('yaw', yaw)

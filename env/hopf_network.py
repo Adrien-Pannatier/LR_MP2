@@ -63,7 +63,7 @@ class HopfNetwork():
                 max_step_len_rl=0.1,     # max step length, for RL scaling 
                 use_RL=False             # whether to learn parameters with RL 
                 ):
-    
+     
     
     # initialize CPG data structures: amplitude is row 0, and phase is row 1
     self.X = np.zeros((2,4))
@@ -189,9 +189,9 @@ class HopfNetwork():
     # loop through each leg's oscillator
     for i in range(4):
       # get r_i, theta_i from X
-      r, theta = self.X[:, i] # [TODO]
+      r, theta = self.X[:, i] 
       # compute r_dot (Equation 6)
-      r_dot = self._alpha * (self._mu - r**2)*r # [TODO] 
+      r_dot = self._alpha * (self._mu - r**2)*r 
       # determine whether oscillator i is in swing or stance phase to set natural frequency omega_swing or omega_stance (see Section 3)
       if (theta >= 0) and (theta <= np.pi): # means swing phase
         theta_dot = self._omega_swing

@@ -54,20 +54,19 @@ from env.quadruped_gym_env import QuadrupedGymEnv
 from utils.utils import plot_results
 from utils.file_utils import get_latest_model, load_all_results
 
-
 LEARNING_ALG = "PPO"
 interm_dir = "./logs/intermediate_models/"
 # path to saved models, i.e. interm_dir + '120123143305'
-log_dir = interm_dir + 'CARTPD_FLAGRUN_TORQUE_V6'
+log_dir = interm_dir + 'FLAGRUN_CARTPD'
 
 # initialize env configs (render at test time)
 # check ideal conditions, as well as robustness to UNSEEN noise during training
 env_config = {"motor_control_mode":"CARTESIAN_PD",
                "task_env":"FLAGRUN",
                "observation_space_mode": "FLAGRUN_Y_OBS"}
-env_config['render'] = True
+env_config['render'] = False
 env_config['record_video'] = False
-env_config['add_noise'] = False 
+env_config['add_noise'] = True 
 # env_config['competition_env'] = True
 
 # get latest model and normalization stats, and plot 
@@ -78,12 +77,21 @@ print(monitor_results)
 plot_results([log_dir] , 10e10, 'timesteps', LEARNING_ALG + ' ')
 plt.show() 
 
+lin_vels = []
+yaw_vels = []
+average_velocity = []
+max_yaw_velocity = []
+goal_distances = []
+goals_reached = []
+total_goal_distances = []
+# total_goals_reached = []
 # reconstruct env 
 env = lambda: QuadrupedGymEnv(**env_config)
 env = make_vec_env(env, n_envs=1)
 env = VecNormalize.load(stats_path, env)
 env.training = False    # do not update stats at test time
 env.norm_reward = False # reward normalization is not needed at test time
+
 
 # load model
 if LEARNING_ALG == "PPO":
@@ -99,80 +107,47 @@ episode_reward = 0
 #
 
 for i in range(2000):
-    action, _states = model.predict(obs,deterministic=False) # sample at test time? ([TODO]: test)
+    action, _states = model.predict(obs,deterministic=False) # sample at test time? 
     obs, rewards, dones, info = env.step(action)
     episode_reward += rewards
+
+    
+    lin_vels.append(np.sqrt(env.envs[0].env.robot.GetBaseLinearVelocity()[0]**2 + env.envs[0].env.robot.GetBaseLinearVelocity()[1]**2))
+    yaw_vels.append(np.abs(env.envs[0].env.robot.GetBaseAngularVelocity()[2]))
+
     if dones:
         print('episode_reward', episode_reward)
         print('Final base position', info[0]['base_pos'])
         episode_reward = 0
-    dt = 0.01
-    # penalize pitch and roll
-    # dt values according to CPG-RL Paper
-    vel_z_pen = 0.8 * dt * env.envs[0].env.robot.GetBaseLinearVelocity()[2]**2 #3
-    roll_pen = 0.6 * dt * np.abs(env.envs[0].env.robot.GetBaseAngularVelocity()[0]**2) #1
-    pitch_pen = 0.6 * dt * np.abs(env.envs[0].env.robot.GetBaseAngularVelocity()[1]**2) #2
-
-    curr_dist_to_goal, angle = env.envs[0].env.get_distance_and_angle_to_goal()
-    # lin_vel_x, lin_vel_y = self.get_robot_lin_vel()
-    # minimize distance to goal (we want to move towards the goal)
-    dist_reward = 100 * dt * (env.envs[0].env._prev_pos_to_goal - curr_dist_to_goal) #7
-    angle_pen = 0.01 * dt * np.abs(angle) #8
-    # minimize energy 
-    energy = 0 
-
-    for tau,vel in zip(env.envs[0].env._dt_motor_torques,env.envs[0].env._dt_motor_velocities):
-      energy += np.abs(np.dot(tau,vel)) * env.envs[0].env._time_step 
-
-    energy_pen = 0.002 * dt * energy #9
-
-    reward = dist_reward \
-            - angle_pen \
-            - energy_pen \
-            - vel_z_pen \
-            - roll_pen \
-            - pitch_pen 
-    
-    print(env.envs[0].env.robot.GetBaseOrientationRollPitchYaw())
-    # motor_angle_tracking = 0.0
-    # for i in range (4):
-    #   motor_angle_tracking += -0.01 * (env.envs[0].env.robot.GetMotorAngles()[i*3]) ** 2 \
-      
-    # print('motor_angle_tracking %: ', motor_angle_tracking)
-    # print(env.envs[0].env.robot.GetBaseAngularVelocity()[:2]**2)
-    # print('reward', reward)
-    # print('roll', env.envs[0].env.robot.GetBaseOrientationRollPitchYaw()[0])
-    # print('pitch', env.envs[0].env.robot.GetBaseOrientationRollPitchYaw()[1])
-    # print('delta_dist', env.envs[0].env._prev_pos_to_goal - curr_dist_to_goal)
-    # print('angle', angle)
-    # print('roll_pen %: ', roll_pen)
-    # print('pitch_pen %: ', pitch_pen)
-    # print('vel_z_pen %: ', vel_z_pen)
-    # # print('z_height_tracking %: ', z_height_pen*percentage)
-    # print('dist_reward %: ', dist_reward)
-    # print('angle_pen %: ', angle_pen)
-    # print('energy_pen %: ', energy_pen)
-    # tot = dist_reward \
-    #     + energy_pen \
-    #     + angle_pen \
-    #     + vel_z_pen \
-    #     + roll_pen \
-    #     + pitch_pen 
-    # print('fct', env.envs[0].env.get_distance_and_angle_to_goal())
-    # percentage = 100/tot
-    # print('total (=100%): ', tot)
-    # print('roll_pen %: ', roll_pen*percentage)
-    # print('pitch_pen %: ', pitch_pen*percentage)
-    # print('vel_z_pen %: ', vel_z_pen*percentage)
-    # # print('z_height_tracking %: ', z_height_pen*percentage)
-    # print('dist_reward %: ', dist_reward*percentage)
-    # print('angle_pen %: ', angle_pen*percentage)
-    # print('energy_pen %: ', energy_pen*percentage)
-    # print('vel_x_tracking %: ', vel_x_tracking*percentage)
-    # print('vel_y_tracking %: ', vel_y_tracking*percentage)
-    # print('angle_goal_tracking %: ', angle_goal_tracking*percentage)
-    # print('base height:', env.envs[0].env.robot.GetBasePosition()[2])
-    print('----------------------------------------')
         
-    
 # [TODO] make plots:
+mean_value = np.mean(lin_vels)
+max_vel = np.max(yaw_vels)
+# Plot average velocity
+plt.plot(lin_vels)
+plt.axhline(y=mean_value, color='red', linestyle='--', label='Mean Vel: {:.2f}'.format(mean_value)) 
+plt.xlabel('Time Steps')
+plt.ylabel('Linear Velocity Normed [m/s]')
+plt.ylim(0, 3)
+plt.title('Normed Linear Velocity over time')
+plt.legend()
+plt.show()
+
+# Plot maximum yaw velocity
+    
+plt.plot(yaw_vels)
+plt.axhline(y=max_vel, color='red', linestyle='--', label='Max Vel: {:.2f}'.format(max_vel))  
+plt.xlabel('Time Steps')
+plt.ylabel('Yaw Velocity (absolute value) [m/s]')
+plt.ylim(0, 8)
+plt.title('Yaw Velocity over Time')
+plt.legend()
+plt.show()
+
+
+
+# plt.plot(goal_distances, goals_reached)
+# plt.xlabel('Time Steps')
+# plt.ylabel('Maximum Yaw Velocity [m/s]')
+# plt.title('Maximum Yaw Velocity over Time')
+# plt.show()
